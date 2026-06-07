@@ -3,7 +3,7 @@ import { extname, join, normalize } from "node:path";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
 import { Resend } from "resend";
-const resend = new Resend(re_7P5AXJ4t_4rGs972DEgTZ3HVUsQDSVSpD);
+const resend = new Resend(process.env.re_7P5AXJ4t_4rGs972DEgTZ3HVUsQDSVSpD);
 import {
   approveUser,
   authenticate,
