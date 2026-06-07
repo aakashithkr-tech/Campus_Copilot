@@ -1,7 +1,7 @@
 import { defaultState, demoUsers, navByRole, pageLabels } from "./data.js";
 
 const API_BASE = typeof window !== "undefined" && window.location.hostname !== "localhost"
-  ? "https://campus-copilot-0ewc.onrender.com"
+ ? "https://campus-copilot-whd3.onrender.com"
   : "";
 const icons = {
   arrow: '<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
