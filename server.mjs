@@ -3,7 +3,6 @@ import { extname, join, normalize } from "node:path";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
 import { Resend } from "resend";
-const resend = new Resend(process.env.RESEND_API_KEY);
 import {
   approveUser,
   authenticate,
@@ -32,13 +31,7 @@ import {
   assignSubjectToTeacher,
   addSubjectForAdmin,
   addTeacherByAdmin,
-  otpSet,
-  otpGet,
-  otpDelete,
-  otpCleanup,
 } from "./database.mjs";
-
-import { createRequire } from "node:module";
 
 const port = Number(process.env.PORT || 4173);
 
@@ -52,6 +45,8 @@ let lostFoundStore = structuredClone(defaultState.lostFound);
 let usersStore     = structuredClone(defaultState.users);
 const root = process.cwd();
 
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 async function sendOTPEmail(toEmail, otp, name) {
   console.log("\n" + "═".repeat(50));
   console.log(`📧  OTP EMAIL`);
@@ -61,13 +56,12 @@ async function sendOTPEmail(toEmail, otp, name) {
   console.log(`    Valid: 10 minutes`);
   console.log("═".repeat(50) + "\n");
 
-  const isConfigured = !!process.env.RESEND_API_KEY;
-  if (!isConfigured) return { dev: true };
+  if (!process.env.RESEND_API_KEY) return { dev: true };
 
   await resend.emails.send({
-    from: "CampusCopilot <onboarding@resend.dev>", // ya apna domain
+    from: "CampusCopilot <onboarding@resend.dev>",
     to: toEmail,
-    subject: "Your CampusCopilot Registration OTP",
+    subject: "Your CampusCopilot OTP",
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px">
         <h2 style="margin:0 0 8px">👋 Hi ${name},</h2>
@@ -76,17 +70,16 @@ async function sendOTPEmail(toEmail, otp, name) {
           <span style="font-size:2.5rem;font-weight:700;letter-spacing:0.4em;color:#1e1b4b">${otp}</span>
         </div>
         <p style="color:#6b7280;font-size:0.875rem;margin:0">Valid for <strong>10 minutes</strong>. Do not share it.</p>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+        <p style="color:#9ca3af;font-size:0.75rem;margin:0">If you did not request this, ignore this email.</p>
       </div>
     `,
   });
-
   return { dev: false };
 }
 
+const otpStore = new Map();
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
-
-// Cleanup expired OTPs from DB every 15 minutes
-setInterval(() => otpCleanup(), 15 * 60 * 1000);
 
 function generateOTP() {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -150,16 +143,16 @@ createServer(async (req, res) => {
             json(res, 400, { error: "Admission number is required for students." });
             return;
           }
-          const record = admissionRecord(admission_number);
+          const record = await admissionRecord(admission_number);
           if (!record) {
             json(res, 400, {
-              error: `Admission number "${admission_number.toUpperCase()}" was not found in the college database. Ask your admin to add it first (see /api/admin/add-admission).`,
+              error: `Admission number "${admission_number.toUpperCase()}" was not found in the college database. Ask your admin to add it first.`,
             });
             return;
           }
         }
 
-        if (isEmailTaken(email)) {
+        if (await isEmailTaken(email)) {
           json(res, 400, { error: "An account with this email already exists." });
           return;
         }
@@ -167,7 +160,7 @@ createServer(async (req, res) => {
         const otp = generateOTP();
         const expiresAt = Date.now() + OTP_EXPIRY_MS;
 
-        otpSet(email.toLowerCase().trim(), {
+        otpStore.set(email.toLowerCase().trim(), {
           otp,
           expiresAt,
           registrationData: { role, name, email, phone, admission_number, password },
@@ -177,7 +170,7 @@ createServer(async (req, res) => {
 
         json(res, 200, {
           message: emailResult.dev
-            ? `OTP generated (dev mode). Check your server terminal — Gmail not configured yet.`
+            ? `OTP generated (dev mode). Check your server terminal.`
             : `OTP sent to ${email}. Check your inbox (also check spam folder).`,
         });
         return;
@@ -191,14 +184,14 @@ createServer(async (req, res) => {
           return;
         }
 
-        const entry = otpGet(email.toLowerCase().trim());
+        const entry = otpStore.get(email.toLowerCase().trim());
 
         if (!entry) {
           json(res, 400, { error: "No OTP request found for this email. Please request a new OTP." });
           return;
         }
         if (Date.now() > entry.expiresAt) {
-          otpDelete(email.toLowerCase().trim());
+          otpStore.delete(email.toLowerCase().trim());
           json(res, 400, { error: "OTP has expired. Please request a new one." });
           return;
         }
@@ -208,18 +201,18 @@ createServer(async (req, res) => {
         }
 
         try {
-          const newUser = createRegistration(entry.registrationData);
-          otpDelete(email.toLowerCase().trim());
+          const newUser = await createRegistration(entry.registrationData);
+          otpStore.delete(email.toLowerCase().trim());
 
           if (newUser.isKnownUser) {
             json(res, 201, {
-              message: `Email verified! Your account is ready. Your Login ID is ${newUser.loginId}. You can log in now.`,
-              loginId: newUser.loginId,
+              message: `Email verified! Your account is ready. Your Login ID is ${newUser.user.loginId}. You can log in now.`,
+              loginId: newUser.user.loginId,
               autoApproved: true,
             });
           } else {
             json(res, 201, {
-              message: "Email verified! Your account request has been submitted. Wait for Admin approval — you'll receive your Login ID once approved.",
+              message: "Email verified! Your account request has been submitted. Wait for Admin approval.",
               autoApproved: false,
             });
           }
@@ -235,13 +228,13 @@ createServer(async (req, res) => {
           json(res, 400, { error: "Email is required." });
           return;
         }
-        const user = getUserByEmail(email);
+        const user = await getUserByEmail(email);
         if (!user || user.status !== "Approved") {
           json(res, 200, { message: "If this email is registered and approved, an OTP has been sent." });
           return;
         }
         const otp = generateOTP();
-        otpSet(`reset:${email.toLowerCase().trim()}`, { otp, expiresAt: Date.now() + OTP_EXPIRY_MS });
+        otpStore.set(`reset:${email.toLowerCase().trim()}`, { otp, expiresAt: Date.now() + OTP_EXPIRY_MS });
         const emailResult = await sendOTPEmail(email, otp, user.name);
         json(res, 200, {
           message: emailResult.dev
@@ -262,13 +255,13 @@ createServer(async (req, res) => {
           return;
         }
         const key = `reset:${email.toLowerCase().trim()}`;
-        const entry = otpGet(key);
+        const entry = otpStore.get(key);
         if (!entry) {
           json(res, 400, { error: "No OTP request found. Please request a new OTP." });
           return;
         }
         if (Date.now() > entry.expiresAt) {
-          otpDelete(key);
+          otpStore.delete(key);
           json(res, 400, { error: "OTP has expired. Please request a new one." });
           return;
         }
@@ -277,9 +270,9 @@ createServer(async (req, res) => {
           return;
         }
         try {
-          updatePassword(email, newPassword);
-          otpDelete(key);
-          json(res, 200, { message: "Password reset successful. You can now log in with your new password." });
+          await updatePassword(email, newPassword);
+          otpStore.delete(key);
+          json(res, 200, { message: "Password reset successful. You can now log in." });
         } catch (err) {
           json(res, 400, { error: err.message });
         }
@@ -296,7 +289,7 @@ createServer(async (req, res) => {
 
         let user;
         try {
-          user = authenticate(role, login_id, password);
+          user = await authenticate({ role, loginId: login_id, password });
         } catch (err) {
           json(res, 429, { error: err.message });
           return;
@@ -307,22 +300,22 @@ createServer(async (req, res) => {
           return;
         }
 
-        const token = createSession(user.id);
-        recordLogin(user.id, user.role, "Success", "Login successful");
+        const token = await createSession(user.id);
+        await recordLogin(user.id, user.role, "Success", "Login successful");
         json(res, 200, { token, user });
         return;
       }
 
       if (req.method === "POST" && pathname === "/api/auth/logout") {
-        deleteSession(bearerToken(req));
+        await deleteSession(bearerToken(req));
         json(res, 200, { message: "Signed out." });
         return;
       }
 
       if (req.method === "GET" && pathname === "/api/state") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
-        const dbState = getDashboardState(session);
+        const dbState = await getDashboardState(session);
         json(res, 200, {
           ...dbState,
           notices:    noticesStore,
@@ -338,18 +331,18 @@ createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && pathname === "/api/attendance") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role === "student") {
           json(res, 403, { error: "Forbidden" }); return;
         }
         const body = await readBody(req);
-        upsertAttendance({ ...body, markedBy: session.id });
+        await upsertAttendance({ ...body, markedBy: session.id });
         json(res, 200, { message: "Attendance updated." });
         return;
       }
 
       if (req.method === "POST" && pathname === "/api/admin/add-admission") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role !== "admin") {
           json(res, 403, { error: "Only admins can add admission records." }); return;
         }
@@ -358,7 +351,7 @@ createServer(async (req, res) => {
           json(res, 400, { error: "admission_number, name, and email are required." }); return;
         }
         try {
-          const record = addAdmissionRecord({ admission_number, name, email });
+          const record = await addAdmissionRecord({ admission_number, name, email });
           json(res, 201, { message: `Admission record added for ${name} (${admission_number.toUpperCase()}).`, record });
         } catch (err) {
           json(res, 400, { error: err.message });
@@ -367,53 +360,53 @@ createServer(async (req, res) => {
       }
 
       if (req.method === "GET" && pathname === "/api/admin/admissions") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role !== "admin") {
           json(res, 403, { error: "Only admins can view admission records." }); return;
         }
-        const records = listAdmissions();
+        const records = await listAdmissions();
         json(res, 200, { records });
         return;
       }
 
       if (req.method === "POST" && pathname.startsWith("/api/moderation/approve/")) {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role === "student") {
           json(res, 403, { error: "Forbidden" }); return;
         }
         const userId = Number(pathname.split("/").pop());
-        const result = approveUser(userId, session.name, session.role);
+        const result = await approveUser(userId, session.name, session.role);
         if (!result) { json(res, 400, { error: "Could not approve user." }); return; }
         json(res, 200, { message: "User approved.", user: result });
         return;
       }
 
       if (req.method === "POST" && pathname.startsWith("/api/moderation/reject/")) {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role === "student") {
           json(res, 403, { error: "Forbidden" }); return;
         }
         const userId = Number(pathname.split("/").pop());
-        const result = rejectUser(userId, session.name, session.role);
+        const result = await rejectUser(userId, session.name, session.role);
         if (!result) { json(res, 400, { error: "Could not reject user." }); return; }
         json(res, 200, { message: "User rejected.", user: result });
         return;
       }
 
       if (req.method === "GET" && pathname === "/api/subjects") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
-        json(res, 200, { subjects: getAllSubjects() });
+        json(res, 200, { subjects: await getAllSubjects() });
         return;
       }
 
       if (req.method === "POST" && pathname === "/api/subjects") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role !== "teacher") { json(res, 403, { error: "Only teachers can create subjects." }); return; }
         const { name, code } = await readBody(req);
         if (!name || !code) { json(res, 400, { error: "name and code are required." }); return; }
         try {
-          const subject = addSubject({ name, code, teacherId: session.id });
+          const subject = await addSubject({ name, code, teacherId: session.id });
           json(res, 201, { message: `Subject "${name}" created.`, subject });
         } catch (err) {
           json(res, 400, { error: err.message });
@@ -422,78 +415,78 @@ createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && pathname === "/api/class-attendance") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role === "student") { json(res, 403, { error: "Forbidden" }); return; }
         const body = await readBody(req);
         const records = Array.isArray(body) ? body : [body];
         for (const rec of records) {
-          upsertClassAttendance({ ...rec, markedBy: session.id });
+          await upsertClassAttendance({ ...rec, markedBy: session.id });
         }
         json(res, 200, { message: "Class attendance updated." });
         return;
       }
 
       if (req.method === "POST" && pathname === "/api/marks") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role === "student") { json(res, 403, { error: "Forbidden" }); return; }
         const body = await readBody(req);
         const records = Array.isArray(body) ? body : [body];
         for (const rec of records) {
-          addOrUpdateMark({ ...rec, recordedBy: session.id });
+          await addOrUpdateMark({ ...rec, recordedBy: session.id });
         }
         json(res, 200, { message: "Marks saved." });
         return;
       }
 
       if (req.method === "POST" && pathname === "/api/assignments") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role === "student") { json(res, 403, { error: "Forbidden" }); return; }
         const body = await readBody(req);
         if (!body.subjectId || !body.title || !body.dueDate) {
           json(res, 400, { error: "subjectId, title, dueDate are required." }); return;
         }
-        createAssignment({ ...body, createdBy: session.id });
+        await createAssignment({ ...body, createdBy: session.id });
         json(res, 201, { message: "Assignment created." });
         return;
       }
 
       if (req.method === "POST" && pathname.match(/^\/api\/assignments\/\d+\/submission$/)) {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role === "student") { json(res, 403, { error: "Forbidden" }); return; }
         const assignmentId = Number(pathname.split("/")[3]);
         const body = await readBody(req);
-        updateSubmissionStatus({ assignmentId, ...body });
+        await updateSubmissionStatus({ assignmentId, ...body });
         json(res, 200, { message: "Submission updated." });
         return;
       }
 
       if (req.method === "GET" && pathname.match(/^\/api\/assignments\/\d+\/students$/)) {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role === "student") { json(res, 403, { error: "Forbidden" }); return; }
         const assignmentId = Number(pathname.split("/")[3]);
-        json(res, 200, { students: getAssignmentStudents(assignmentId) });
+        json(res, 200, { students: await getAssignmentStudents(assignmentId) });
         return;
       }
 
       if (req.method === "GET" && pathname === "/api/admin/teachers") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role !== "admin") { json(res, 403, { error: "Forbidden" }); return; }
-        json(res, 200, { teachers: getAllTeachers() }); return;
+        json(res, 200, { teachers: await getAllTeachers() }); return;
       }
 
       if (req.method === "GET" && pathname === "/api/admin/subjects") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role !== "admin") { json(res, 403, { error: "Forbidden" }); return; }
-        json(res, 200, { subjects: getAllSubjects() }); return;
+        json(res, 200, { subjects: await getAllSubjects() }); return;
       }
 
       if (req.method === "POST" && pathname === "/api/admin/subjects") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role !== "admin") { json(res, 403, { error: "Forbidden" }); return; }
         const { name, code, teacherId } = await readBody(req);
         if (!name || !code) { json(res, 400, { error: "name and code are required." }); return; }
         try {
-          const subject = addSubjectForAdmin({ name, code, teacherId });
+          const subject = await addSubjectForAdmin({ name, code, teacherId });
           json(res, 201, { subject }); return;
         } catch (err) {
           json(res, 400, { error: err.message }); return;
@@ -501,14 +494,14 @@ createServer(async (req, res) => {
       }
 
       if (req.method === "PATCH" && pathname.match(/^\/api\/admin\/subjects\/.+\/assign$/)) {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role !== "admin") { json(res, 403, { error: "Forbidden" }); return; }
         const subjectId = parseInt(pathname.split("/api/admin/subjects/")[1].replace("/assign", ""), 10);
         const body = await readBody(req);
         const teacherId = parseInt(body.teacherId, 10);
         if (isNaN(subjectId) || isNaN(teacherId)) { json(res, 400, { error: "Invalid subjectId or teacherId." }); return; }
         try {
-          const subject = assignSubjectToTeacher(subjectId, teacherId);
+          const subject = await assignSubjectToTeacher(subjectId, teacherId);
           json(res, 200, { subject }); return;
         } catch (err) {
           json(res, 400, { error: err.message }); return;
@@ -516,11 +509,11 @@ createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && pathname === "/api/admin/add-teacher") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role !== "admin") { json(res, 403, { error: "Only admins can add teachers." }); return; }
         const { name, email, password } = await readBody(req);
         try {
-          const teacher = addTeacherByAdmin({ name, email, password });
+          const teacher = await addTeacherByAdmin({ name, email, password });
           json(res, 201, { message: `Teacher "${teacher.name}" created.`, loginId: teacher.loginId, teacher });
         } catch (err) {
           json(res, 400, { error: err.message });
@@ -529,14 +522,14 @@ createServer(async (req, res) => {
       }
 
       if (req.method === "GET" && pathname === "/api/admin/real-users") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role !== "admin") { json(res, 403, { error: "Forbidden" }); return; }
-        const { users } = getDashboardState(session);
+        const { users } = await getDashboardState(session);
         json(res, 200, { users }); return;
       }
 
       if (req.method === "POST" && pathname === "/api/ai/ask") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
         const { question, context } = await readBody(req);
         if (!question) { json(res, 400, { error: "question is required." }); return; }
@@ -553,7 +546,6 @@ createServer(async (req, res) => {
 
         const models = [
           "gemini-2.5-flash",
-          "gemini-3-flash-preview",
           "gemini-2.0-flash",
           "gemini-2.0-flash-001",
           "gemini-2.5-flash-lite",
@@ -604,7 +596,7 @@ createServer(async (req, res) => {
       }
 
       if (pathname === "/api/notices") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
         if (req.method === "POST") {
           const body = await readBody(req);
@@ -615,7 +607,7 @@ createServer(async (req, res) => {
       }
 
       if (pathname === "/api/tasks") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
         if (req.method === "POST") {
           const body = await readBody(req);
@@ -626,7 +618,7 @@ createServer(async (req, res) => {
       }
 
       if (req.method === "PATCH" && pathname.startsWith("/api/tasks/")) {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
         const taskId = decodeURIComponent(pathname.split("/api/tasks/")[1]);
         const body = await readBody(req);
@@ -637,7 +629,7 @@ createServer(async (req, res) => {
       }
 
       if (req.method === "PATCH" && pathname.match(/^\/api\/events\/.+\/registration$/)) {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
         const eventId = decodeURIComponent(pathname.split("/api/events/")[1].replace("/registration", ""));
         const body = await readBody(req);
@@ -648,7 +640,7 @@ createServer(async (req, res) => {
       }
 
       if (pathname === "/api/complaints") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
         if (req.method === "POST") {
           const body = await readBody(req);
@@ -660,7 +652,7 @@ createServer(async (req, res) => {
       }
 
       if (req.method === "PATCH" && pathname.match(/^\/api\/complaints\/.+\/resolve$/)) {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role === "student") { json(res, 403, { error: "Forbidden" }); return; }
         const id = decodeURIComponent(pathname.split("/api/complaints/")[1].replace("/resolve", ""));
         const idx = complaintsStore.findIndex(c => c.id === id);
@@ -670,7 +662,7 @@ createServer(async (req, res) => {
       }
 
       if (pathname === "/api/lost-found") {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
         if (req.method === "POST") {
           const body = await readBody(req);
@@ -681,7 +673,7 @@ createServer(async (req, res) => {
       }
 
       if (req.method === "PATCH" && pathname.match(/^\/api\/lost-found\/.+\/close$/)) {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
         const id = decodeURIComponent(pathname.split("/api/lost-found/")[1].replace("/close", ""));
         const idx = lostFoundStore.findIndex(i => i.id === id);
@@ -691,7 +683,7 @@ createServer(async (req, res) => {
       }
 
       if (req.method === "PATCH" && pathname.match(/^\/api\/questions\/.+\/answer$/)) {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
         const id = decodeURIComponent(pathname.split("/api/questions/")[1].replace("/answer", ""));
         const body = await readBody(req);
@@ -703,7 +695,7 @@ createServer(async (req, res) => {
       }
 
       if (req.method === "PATCH" && pathname.match(/^\/api\/users\/.+\/status$/)) {
-        const session = getSession(bearerToken(req));
+        const session = await getSession(bearerToken(req));
         if (!session || session.role !== "admin") { json(res, 403, { error: "Forbidden" }); return; }
         const id = decodeURIComponent(pathname.split("/api/users/")[1].replace("/status", ""));
         const body = await readBody(req);
@@ -731,7 +723,6 @@ createServer(async (req, res) => {
   }
 }).listen(port, () => {
   console.log(`✅ CampusCopilot running → http://localhost:${port}`);
-  console.log(`   Demo credentials:`);
   console.log(`   Admin:   login_id=ADM001  password=admin123`);
   console.log(`   Teacher: login_id=TCH001  password=teacher123`);
   console.log(`   Student: login_id=STU001  password=student123`);
