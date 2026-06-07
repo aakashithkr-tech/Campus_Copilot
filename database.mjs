@@ -11,9 +11,6 @@ async function exec(sql) {
 }
 
 await exec(`
-  PRAGMA journal_mode = WAL;
-  PRAGMA foreign_keys = ON;
-
   CREATE TABLE IF NOT EXISTS auth_users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     login_id TEXT UNIQUE,
