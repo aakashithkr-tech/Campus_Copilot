@@ -52,14 +52,6 @@ let lostFoundStore = structuredClone(defaultState.lostFound);
 let usersStore     = structuredClone(defaultState.users);
 const root = process.cwd();
 
-const SMTP_USER = process.env.SMTP_USER || "YOUR_GMAIL@gmail.com";
-const SMTP_PASS = process.env.SMTP_PASS || "YOUR_APP_PASSWORD";
-
-const mailer = createTransport({
-  service: "gmail",
-  auth: { user: SMTP_USER, pass: SMTP_PASS },
-});
-
 async function sendOTPEmail(toEmail, otp, name) {
   console.log("\n" + "═".repeat(50));
   console.log(`📧  OTP EMAIL`);
