@@ -132,6 +132,14 @@ db.exec(`
     updated_at INTEGER NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS otp_store (
+    key TEXT PRIMARY KEY,
+    otp TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    registration_data TEXT,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_auth_users_role_status ON auth_users(role, status);
   CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_user_id, class_date);
   CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry ON auth_sessions(expires_at);
@@ -708,4 +716,44 @@ export function addTeacherByAdmin({ name, email, password }) {
   return { id: user.id, loginId: user.loginId, name: user.name, email: user.email, role: "teacher", status: "Approved" };
 }
 
+// ── DB-backed OTP Store (survives server restarts & deployments) ──────────────
 
+/** Save or overwrite an OTP entry */
+export function otpSet(key, { otp, expiresAt, registrationData }) {
+  db.prepare(`
+    INSERT INTO otp_store (key, otp, expires_at, registration_data, created_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET
+      otp = excluded.otp,
+      expires_at = excluded.expires_at,
+      registration_data = excluded.registration_data,
+      created_at = excluded.created_at
+  `).run(
+    key,
+    otp,
+    expiresAt,
+    registrationData ? JSON.stringify(registrationData) : null,
+    Date.now()
+  );
+}
+
+/** Retrieve an OTP entry; returns null if not found */
+export function otpGet(key) {
+  const row = db.prepare("SELECT * FROM otp_store WHERE key = ?").get(key);
+  if (!row) return null;
+  return {
+    otp: row.otp,
+    expiresAt: row.expires_at,
+    registrationData: row.registration_data ? JSON.parse(row.registration_data) : null,
+  };
+}
+
+/** Delete a single OTP entry */
+export function otpDelete(key) {
+  db.prepare("DELETE FROM otp_store WHERE key = ?").run(key);
+}
+
+/** Cleanup expired OTPs — call periodically */
+export function otpCleanup() {
+  db.prepare("DELETE FROM otp_store WHERE expires_at <= ?").run(Date.now());
+}

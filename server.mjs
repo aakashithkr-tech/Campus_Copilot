@@ -2,7 +2,8 @@ import { createReadStream, existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
-import { createTransport } from "nodemailer";
+import { Resend } from "resend";
+const resend = new Resend(re_7P5AXJ4t_4rGs972DEgTZ3HVUsQDSVSpD);
 import {
   approveUser,
   authenticate,
@@ -31,6 +32,10 @@ import {
   assignSubjectToTeacher,
   addSubjectForAdmin,
   addTeacherByAdmin,
+  otpSet,
+  otpGet,
+  otpDelete,
+  otpCleanup,
 } from "./database.mjs";
 
 import { createRequire } from "node:module";
@@ -56,7 +61,6 @@ const mailer = createTransport({
 });
 
 async function sendOTPEmail(toEmail, otp, name) {
-  // ✅ FIX: ALWAYS print OTP to terminal
   console.log("\n" + "═".repeat(50));
   console.log(`📧  OTP EMAIL`);
   console.log(`    To   : ${toEmail}`);
@@ -65,34 +69,32 @@ async function sendOTPEmail(toEmail, otp, name) {
   console.log(`    Valid: 10 minutes`);
   console.log("═".repeat(50) + "\n");
 
-  const isConfigured = SMTP_USER !== "YOUR_GMAIL@gmail.com" && SMTP_PASS !== "YOUR_APP_PASSWORD";
+  const isConfigured = !!process.env.RESEND_API_KEY;
+  if (!isConfigured) return { dev: true };
 
-  if (!isConfigured) {
-    return { dev: true };
-  }
-
-  await mailer.sendMail({
-    from: `"CampusCopilot" <${SMTP_USER}>`,
+  await resend.emails.send({
+    from: "CampusCopilot <onboarding@resend.dev>", // ya apna domain
     to: toEmail,
     subject: "Your CampusCopilot Registration OTP",
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px">
         <h2 style="margin:0 0 8px">👋 Hi ${name},</h2>
-        <p style="color:#6b7280;margin:0 0 24px">Welcome to <strong>CampusCopilot</strong>! Use the OTP below to verify your email and complete registration.</p>
+        <p style="color:#6b7280;margin:0 0 24px">Welcome to <strong>CampusCopilot</strong>! Use the OTP below to verify your email.</p>
         <div style="background:#f3f4f6;border-radius:8px;padding:24px;text-align:center;margin-bottom:24px">
           <span style="font-size:2.5rem;font-weight:700;letter-spacing:0.4em;color:#1e1b4b">${otp}</span>
         </div>
-        <p style="color:#6b7280;font-size:0.875rem;margin:0">This OTP is valid for <strong>10 minutes</strong>. Do not share it with anyone.</p>
-        <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-        <p style="color:#9ca3af;font-size:0.75rem;margin:0">If you did not request this, ignore this email.</p>
+        <p style="color:#6b7280;font-size:0.875rem;margin:0">Valid for <strong>10 minutes</strong>. Do not share it.</p>
       </div>
     `,
   });
+
   return { dev: false };
 }
 
-const otpStore = new Map();
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
+
+// Cleanup expired OTPs from DB every 15 minutes
+setInterval(() => otpCleanup(), 15 * 60 * 1000);
 
 function generateOTP() {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -132,7 +134,7 @@ const bearerToken = (req) => {
 
 createServer(async (req, res) => {
   try {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Origin", "https://campuscopilott.netlify.app");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
@@ -173,7 +175,7 @@ createServer(async (req, res) => {
         const otp = generateOTP();
         const expiresAt = Date.now() + OTP_EXPIRY_MS;
 
-        otpStore.set(email.toLowerCase().trim(), {
+        otpSet(email.toLowerCase().trim(), {
           otp,
           expiresAt,
           registrationData: { role, name, email, phone, admission_number, password },
@@ -197,14 +199,14 @@ createServer(async (req, res) => {
           return;
         }
 
-        const entry = otpStore.get(email.toLowerCase().trim());
+        const entry = otpGet(email.toLowerCase().trim());
 
         if (!entry) {
           json(res, 400, { error: "No OTP request found for this email. Please request a new OTP." });
           return;
         }
         if (Date.now() > entry.expiresAt) {
-          otpStore.delete(email.toLowerCase().trim());
+          otpDelete(email.toLowerCase().trim());
           json(res, 400, { error: "OTP has expired. Please request a new one." });
           return;
         }
@@ -215,7 +217,7 @@ createServer(async (req, res) => {
 
         try {
           const newUser = createRegistration(entry.registrationData);
-          otpStore.delete(email.toLowerCase().trim());
+          otpDelete(email.toLowerCase().trim());
 
           if (newUser.isKnownUser) {
             json(res, 201, {
@@ -247,7 +249,7 @@ createServer(async (req, res) => {
           return;
         }
         const otp = generateOTP();
-        otpStore.set(`reset:${email.toLowerCase().trim()}`, { otp, expiresAt: Date.now() + OTP_EXPIRY_MS });
+        otpSet(`reset:${email.toLowerCase().trim()}`, { otp, expiresAt: Date.now() + OTP_EXPIRY_MS });
         const emailResult = await sendOTPEmail(email, otp, user.name);
         json(res, 200, {
           message: emailResult.dev
@@ -268,13 +270,13 @@ createServer(async (req, res) => {
           return;
         }
         const key = `reset:${email.toLowerCase().trim()}`;
-        const entry = otpStore.get(key);
+        const entry = otpGet(key);
         if (!entry) {
           json(res, 400, { error: "No OTP request found. Please request a new OTP." });
           return;
         }
         if (Date.now() > entry.expiresAt) {
-          otpStore.delete(key);
+          otpDelete(key);
           json(res, 400, { error: "OTP has expired. Please request a new one." });
           return;
         }
@@ -284,7 +286,7 @@ createServer(async (req, res) => {
         }
         try {
           updatePassword(email, newPassword);
-          otpStore.delete(key);
+          otpDelete(key);
           json(res, 200, { message: "Password reset successful. You can now log in with your new password." });
         } catch (err) {
           json(res, 400, { error: err.message });

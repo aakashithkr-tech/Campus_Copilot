@@ -83,6 +83,14 @@ async function handleApi(request, response, pathname) {
     return true;
   }
 
+  // Ye code handleApi function ke andar add karna hai
+if (request.method === "POST" && pathname === "/api/register") {
+  const body = await readBody(request);
+  const result = createRegistration(body); // Ye function database.mjs se aayega
+  json(response, 201, { message: "Registration successful! Wait for admin approval." });
+  return true;
+}
+
   if (request.method === "POST" && pathname === "/api/auth/login") {
     const { role, email, password } = await readBody(request);
     const user = authenticate(role, email, password);

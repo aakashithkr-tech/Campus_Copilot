@@ -9,6 +9,7 @@
     "check": "node --check src/app.js && node --check src/data.js && node --check database.mjs && node --check server.mjs"
   },
   "dependencies": {
-    "nodemailer": "^8.0.10"
+    "nodemailer": "^8.0.10",
+    "resend": "^6.12.4"
   }
 }
