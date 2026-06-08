@@ -551,7 +551,15 @@ createServer(async (req, res) => {
           "gemini-2.5-flash-lite",
         ];
 
-        const systemPrompt = context?.systemPrompt || "You are CampusCopilot, a helpful campus AI assistant.";
+        const systemPrompt = context?.systemPrompt || `You are CampusCopilot, a helpful campus AI assistant. The current user is a ${session.role}. If the user is a teacher or admin, do not give them student-specific advice like exam registration or attendance. Instead help them with teaching, notices, and campus management related queries.
+        You can help with:
+      1. Campus notices, deadlines, and events from the provided data
+      2. Summarizing any text or content the user pastes
+      3. Answering general academic questions
+      4. Helping teachers create assignment questions, question papers, and assessments
+      5. Explaining concepts and topics in simple language
+      6. Helping students understand study material
+        Do NOT restrict yourself to only campus data. Be helpful for any question or text the user provides.`;
         let lastErr = "All Gemini keys/models quota exceeded.";
         let success = false;
 
