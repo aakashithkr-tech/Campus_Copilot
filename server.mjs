@@ -2,7 +2,6 @@ import { createReadStream, existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
-import { Resend } from "resend";
 import {
   approveUser,
   authenticate,
@@ -45,8 +44,6 @@ let lostFoundStore = structuredClone(defaultState.lostFound);
 let usersStore     = structuredClone(defaultState.users);
 const root = process.cwd();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 async function sendOTPEmail(toEmail, otp, name) {
   console.log("\n" + "═".repeat(50));
   console.log(`📧  OTP EMAIL`);
@@ -66,30 +63,21 @@ async function sendOTPEmail(toEmail, otp, name) {
       sender: { name: "CampusCopilot", email: "aakashithkr@gmail.com" },
       to: [{ email: toEmail, name }],
       subject: "Your CampusCopilot OTP",
-      htmlContent: `<div style="font-family:sans-serif;padding:32px"><h2>Hi ${name},</h2><p>Your OTP is:</p><h1 style="letter-spacing:0.4em">${otp}</h1><p>Valid for 10 minutes.</p></div>`,
+      htmlContent: `
+        <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px">
+          <h2 style="margin:0 0 8px">👋 Hi ${name},</h2>
+          <p style="color:#6b7280;margin:0 0 24px">Welcome to <strong>CampusCopilot</strong>! Use the OTP below to verify your email.</p>
+          <div style="background:#f3f4f6;border-radius:8px;padding:24px;text-align:center;margin-bottom:24px">
+            <span style="font-size:2.5rem;font-weight:700;letter-spacing:0.4em;color:#1e1b4b">${otp}</span>
+          </div>
+          <p style="color:#6b7280;font-size:0.875rem;margin:0">Valid for <strong>10 minutes</strong>. Do not share it.</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+          <p style="color:#9ca3af;font-size:0.75rem;margin:0">If you did not request this, ignore this email.</p>
+        </div>
+      `,
     }),
   });
 
-  return { dev: false };
-}
-
-  await resend.emails.send({
-    from: "CampusCopilot <onboarding@resend.dev>",
-    to: toEmail,
-    subject: "Your CampusCopilot OTP",
-    html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px">
-        <h2 style="margin:0 0 8px">👋 Hi ${name},</h2>
-        <p style="color:#6b7280;margin:0 0 24px">Welcome to <strong>CampusCopilot</strong>! Use the OTP below to verify your email.</p>
-        <div style="background:#f3f4f6;border-radius:8px;padding:24px;text-align:center;margin-bottom:24px">
-          <span style="font-size:2.5rem;font-weight:700;letter-spacing:0.4em;color:#1e1b4b">${otp}</span>
-        </div>
-        <p style="color:#6b7280;font-size:0.875rem;margin:0">Valid for <strong>10 minutes</strong>. Do not share it.</p>
-        <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-        <p style="color:#9ca3af;font-size:0.75rem;margin:0">If you did not request this, ignore this email.</p>
-      </div>
-    `,
-  });
   return { dev: false };
 }
 
