@@ -2,17 +2,7 @@ import { createReadStream, existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
-import nodemailer from "nodemailer";
-
-const transporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: "af3a35001@smtp-brevo.com",
-    pass: "RNbrT8EdzIChcYUV",
-  },
-});
+import { Resend } from "resend";
 import {
   approveUser,
   authenticate,
@@ -55,20 +45,36 @@ let lostFoundStore = structuredClone(defaultState.lostFound);
 let usersStore     = structuredClone(defaultState.users);
 const root = process.cwd();
 
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 async function sendOTPEmail(toEmail, otp, name) {
   console.log("\n" + "═".repeat(50));
   console.log(`📧  OTP EMAIL`);
   console.log(`    To   : ${toEmail}`);
-  console.log(`    Name : ${name}`);
   console.log(`    OTP  : ${otp}`);
-  console.log(`    Valid: 10 minutes`);
   console.log("═".repeat(50) + "\n");
 
-  if (!process.env.BREVO_READY) return { dev: true };
-  //if (!process.env.GMAIL_USER) return { dev: true };
+  if (!process.env.BREVO_API_KEY) return { dev: true };
 
-  await transporter.sendMail({
-    from: `"CampusCopilot" <aakashithkr@gmail.com>`,
+  await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "api-key": process.env.BREVO_API_KEY,
+    },
+    body: JSON.stringify({
+      sender: { name: "CampusCopilot", email: "aakashithkr@gmail.com" },
+      to: [{ email: toEmail, name }],
+      subject: "Your CampusCopilot OTP",
+      htmlContent: `<div style="font-family:sans-serif;padding:32px"><h2>Hi ${name},</h2><p>Your OTP is:</p><h1 style="letter-spacing:0.4em">${otp}</h1><p>Valid for 10 minutes.</p></div>`,
+    }),
+  });
+
+  return { dev: false };
+}
+
+  await resend.emails.send({
+    from: "CampusCopilot <onboarding@resend.dev>",
     to: toEmail,
     subject: "Your CampusCopilot OTP",
     html: `
