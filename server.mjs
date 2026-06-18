@@ -2,10 +2,17 @@ import { createReadStream, existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
-<<<<<<< HEAD
-=======
 import nodemailer from "nodemailer";
->>>>>>> 1b90f7c (Update transporter to Brevo)
+
+const transporter = nodemailer.createTransport({
+  host: "smtp-relay.brevo.com",
+  port: 587,
+  secure: false,
+  auth: {
+    user: "af3a35001@smtp-brevo.com",
+    pass: "RNbrT8EdzIChcYUV",
+  },
+});
 import {
   approveUser,
   authenticate,
@@ -48,19 +55,6 @@ let lostFoundStore = structuredClone(defaultState.lostFound);
 let usersStore     = structuredClone(defaultState.users);
 const root = process.cwd();
 
-<<<<<<< HEAD
-=======
-const transporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: "af3a35001@smtp-brevo.com",
-    pass: "RNbrT8EdzIChcYUV",
-  },
-});
-
->>>>>>> 1b90f7c (Update transporter to Brevo)
 async function sendOTPEmail(toEmail, otp, name) {
   console.log("\n" + "═".repeat(50));
   console.log(`📧  OTP EMAIL`);
