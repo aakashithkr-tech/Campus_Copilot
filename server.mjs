@@ -2,7 +2,6 @@ import { createReadStream, existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
-import { Resend } from "resend";
 import {
   approveUser,
   authenticate,
