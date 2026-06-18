@@ -44,8 +44,6 @@ let lostFoundStore = structuredClone(defaultState.lostFound);
 let usersStore     = structuredClone(defaultState.users);
 const root = process.cwd();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 async function sendOTPEmail(toEmail, otp, name) {
   console.log("\n" + "═".repeat(50));
   console.log(`📧  OTP EMAIL`);
