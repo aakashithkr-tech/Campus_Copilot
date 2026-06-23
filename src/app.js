@@ -44,7 +44,7 @@ function initChat() {
   return [
     {
       from: "assistant",
-      text: `Hi ${firstName}. Ask me about any verified notice, deadline, event, or campus action.`,
+      text: `Hi ${firstName}! How may I help you today?`,
     },
   ];
 }
