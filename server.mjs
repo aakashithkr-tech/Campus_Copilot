@@ -583,9 +583,10 @@ createServer(async (req, res) => {
               );
               const aiData = await aiRes.json();
               if (!aiRes.ok) {
-                lastErr = aiData.error?.message || "Gemini API error.";
-                console.log(`Skipping ${model}: ${lastErr.slice(0,60)}`);
-                continue;
+              lastErr = aiData.error?.message || "Gemini API error.";
+              console.log(`Skipping ${model}: ${lastErr.slice(0,60)}`);
+              console.log(`Full error for ${model}:`, JSON.stringify(aiData)); // ADD THIS
+              continue;
               }
               const text = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "No response from AI.";
               console.log(`Gemini OK: model=${model}`);
