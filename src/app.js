@@ -1783,7 +1783,7 @@ Rules:
         "Content-Type": "application/json",
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       },
-      body: JSON.stringify({ question, context: { systemPrompt } }),
+     body: JSON.stringify({ question, context: {} }),
     });
 
     const data = await response.json();
