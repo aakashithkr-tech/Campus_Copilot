@@ -917,8 +917,8 @@ function teacherOverview() {
             </tbody>
           </table>
         </div>
-        <div style="margin-top:1rem">
-          <button class="secondary-button" id="add-subject-btn">${icon("plus")} Add New Subject</button>
+        <div style="margin-top:1rem;color:var(--muted);font-size:0.85rem">
+          Contact your admin to add or assign subjects.
         </div>
       </section>
       <section class="panel">
@@ -2313,15 +2313,6 @@ function bindEvents() {
     });
     if (!records.length) { showToast("Mark at least one student's status.", "error"); return; }
     await mutate("/api/class-attendance", { method: "POST", body: records }, `Attendance saved for ${records.length} students.`);
-  });
-
-  // ── TEACHER: Add subject ───────────────────────────────────────────────────
-  document.querySelector("#add-subject-btn")?.addEventListener("click", async () => {
-    const name = prompt("Subject name (e.g. Mathematics):");
-    if (!name) return;
-    const code = prompt("Subject code (e.g. MA101):");
-    if (!code) return;
-    await mutate("/api/subjects", { method: "POST", body: { name, code } }, `Subject "${name}" added.`);
   });
 
   // ── TEACHER: Marks page controls ──────────────────────────────────────────

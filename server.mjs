@@ -412,16 +412,9 @@ createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && pathname === "/api/subjects") {
-        const session = await getSession(bearerToken(req));
-        if (!session || session.role !== "teacher") { json(res, 403, { error: "Only teachers can create subjects." }); return; }
-        const { name, code } = await readBody(req);
-        if (!name || !code) { json(res, 400, { error: "name and code are required." }); return; }
-        try {
-          const subject = await addSubject({ name, code, teacherId: session.id });
-          json(res, 201, { message: `Subject "${name}" created.`, subject });
-        } catch (err) {
-          json(res, 400, { error: err.message });
-        }
+        // Subject creation is restricted to admins only.
+        // Teachers should use /api/admin/subjects (via admin) to get subjects assigned.
+        json(res, 403, { error: "Only admins can create subjects. Ask your admin to add and assign subjects." });
         return;
       }
 
