@@ -126,83 +126,12 @@ await exec(`
     updated_at INTEGER NOT NULL
   );
 
-  -- ── NEW TABLES ──────────────────────────────────────────────
-
-  CREATE TABLE IF NOT EXISTS notices (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    body TEXT NOT NULL DEFAULT '',
-    target_role TEXT NOT NULL DEFAULT 'all' CHECK (target_role IN ('all', 'student', 'teacher')),
-    priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
-    created_by INTEGER NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    assigned_to INTEGER NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-    assigned_by INTEGER NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-    due_date TEXT,
-    priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high')),
-    status TEXT NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'In Progress', 'Done', 'Cancelled')),
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    location TEXT NOT NULL DEFAULT '',
-    event_date TEXT NOT NULL,
-    event_time TEXT NOT NULL DEFAULT '00:00',
-    target_role TEXT NOT NULL DEFAULT 'all' CHECK (target_role IN ('all', 'student', 'teacher')),
-    created_by INTEGER NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS complaints (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    subject TEXT NOT NULL,
-    body TEXT NOT NULL DEFAULT '',
-    category TEXT NOT NULL DEFAULT 'General' CHECK (category IN ('General', 'Academic', 'Infrastructure', 'Conduct', 'Other')),
-    status TEXT NOT NULL DEFAULT 'Open' CHECK (status IN ('Open', 'In Review', 'Resolved', 'Dismissed')),
-    filed_by INTEGER NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-    resolved_by INTEGER REFERENCES auth_users(id) ON DELETE SET NULL,
-    resolution_note TEXT NOT NULL DEFAULT '',
-    filed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS lost_found (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    type TEXT NOT NULL CHECK (type IN ('Lost', 'Found')),
-    item_name TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    location TEXT NOT NULL DEFAULT '',
-    contact TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'Open' CHECK (status IN ('Open', 'Claimed', 'Closed')),
-    reported_by INTEGER NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-    reported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    closed_at TEXT
-  );
-
-  -- ── INDEXES ─────────────────────────────────────────────────
-
   CREATE INDEX IF NOT EXISTS idx_class_attendance_student ON class_attendance(student_user_id, subject_id, class_date);
   CREATE INDEX IF NOT EXISTS idx_test_marks_student ON test_marks(student_user_id, subject_id);
   CREATE INDEX IF NOT EXISTS idx_assignments_subject ON assignments(subject_id);
   CREATE INDEX IF NOT EXISTS idx_auth_users_role_status ON auth_users(role, status);
   CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_user_id, class_date);
   CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry ON auth_sessions(expires_at);
-  CREATE INDEX IF NOT EXISTS idx_notices_target ON notices(target_role, created_at);
-  CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to, status);
-  CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date, target_role);
-  CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status, filed_by);
-  CREATE INDEX IF NOT EXISTS idx_lost_found_status ON lost_found(status, type);
 `);
 
 const hashPassword = (password, salt = randomBytes(16).toString("hex")) => {
@@ -236,6 +165,7 @@ const publicUser = (row) => ({
   approvedBy: row.approvedBy,
 });
 
+// helper: get first row
 const first = (rs) => rs.rows[0] || null;
 const all = (rs) => rs.rows;
 
@@ -256,12 +186,10 @@ async function seed() {
 
   const studentRow = first(await db.execute({ sql: `SELECT id FROM auth_users WHERE login_id = 'STU001'`, args: [] }));
   const teacherRow = first(await db.execute({ sql: `SELECT id FROM auth_users WHERE login_id = 'TCH001'`, args: [] }));
-  const adminRow = first(await db.execute({ sql: `SELECT id FROM auth_users WHERE login_id = 'ADM001'`, args: [] }));
 
-  if (studentRow && teacherRow && adminRow) {
+  if (studentRow && teacherRow) {
     const sid = studentRow.id;
     const tid = teacherRow.id;
-    const aid = adminRow.id;
 
     for (const [date, status] of [["2026-06-01","Present"],["2026-06-02","Late"],["2026-06-03","Present"]]) {
       await db.execute({ sql: `INSERT OR IGNORE INTO attendance (student_user_id, class_date, status, marked_by) VALUES (?, ?, ?, ?)`, args: [sid, date, status, tid] });
@@ -316,26 +244,6 @@ async function seed() {
     if (al[0]) await db.execute({ sql: `INSERT OR IGNORE INTO assignment_submissions (assignment_id, student_user_id, status, submitted_at) VALUES (?, ?, ?, ?)`, args: [al[0].id, sid, "Submitted", "2026-06-08"] });
     if (al[1]) await db.execute({ sql: `INSERT OR IGNORE INTO assignment_submissions (assignment_id, student_user_id, status, submitted_at) VALUES (?, ?, ?, ?)`, args: [al[1].id, sid, "Pending", null] });
     if (al[2]) await db.execute({ sql: `INSERT OR IGNORE INTO assignment_submissions (assignment_id, student_user_id, status, submitted_at) VALUES (?, ?, ?, ?)`, args: [al[2].id, sid, "Pending", null] });
-
-    // ── Seed: Notices ────────────────────────────────────────
-    await db.execute({ sql: `INSERT OR IGNORE INTO notices (id, title, body, target_role, priority, created_by, expires_at) VALUES (1, 'Welcome to New Semester', 'Classes begin from June 1. Attendance is mandatory.', 'all', 'high', ?, NULL)`, args: [aid] });
-    await db.execute({ sql: `INSERT OR IGNORE INTO notices (id, title, body, target_role, priority, created_by, expires_at) VALUES (2, 'Mid-Semester Exam Schedule', 'Exams will be held from June 20 to June 25.', 'student', 'urgent', ?, '2026-06-25')`, args: [aid] });
-    await db.execute({ sql: `INSERT OR IGNORE INTO notices (id, title, body, target_role, priority, created_by, expires_at) VALUES (3, 'Staff Meeting', 'All teachers please attend the staff meeting on June 15 at 10 AM.', 'teacher', 'normal', ?, '2026-06-15')`, args: [aid] });
-
-    // ── Seed: Tasks ─────────────────────────────────────────
-    await db.execute({ sql: `INSERT OR IGNORE INTO tasks (id, title, description, assigned_to, assigned_by, due_date, priority, status) VALUES (1, 'Submit Lab Report', 'Submit the pending database lab report by due date.', ?, ?, '2026-07-01', 'high', 'Pending')`, args: [sid, tid] });
-    await db.execute({ sql: `INSERT OR IGNORE INTO tasks (id, title, description, assigned_to, assigned_by, due_date, priority, status) VALUES (2, 'Upload Marks Sheet', 'Upload Unit Test 2 marks to the portal.', ?, ?, '2026-06-30', 'normal', 'Pending')`, args: [tid, aid] });
-
-    // ── Seed: Events ────────────────────────────────────────
-    await db.execute({ sql: `INSERT OR IGNORE INTO events (id, title, description, location, event_date, event_time, target_role, created_by) VALUES (1, 'Annual Tech Fest', 'Participate in coding, robotics and quiz competitions.', 'Main Auditorium', '2026-07-10', '09:00', 'all', ?)`, args: [aid] });
-    await db.execute({ sql: `INSERT OR IGNORE INTO events (id, title, description, location, event_date, event_time, target_role, created_by) VALUES (2, 'Parent-Teacher Meeting', 'PTM for first year students.', 'Conference Hall', '2026-07-05', '11:00', 'student', ?)`, args: [aid] });
-
-    // ── Seed: Complaints ────────────────────────────────────
-    await db.execute({ sql: `INSERT OR IGNORE INTO complaints (id, subject, body, category, status, filed_by) VALUES (1, 'Projector not working in Room 203', 'The projector has been broken for 2 weeks.', 'Infrastructure', 'Open', ?)`, args: [sid] });
-
-    // ── Seed: Lost & Found ──────────────────────────────────
-    await db.execute({ sql: `INSERT OR IGNORE INTO lost_found (id, type, item_name, description, location, contact, reported_by) VALUES (1, 'Lost', 'Blue Water Bottle', 'Milton brand, blue colour with sticker.', 'Canteen area', '9000000003', ?)`, args: [sid] });
-    await db.execute({ sql: `INSERT OR IGNORE INTO lost_found (id, type, item_name, description, location, contact, reported_by) VALUES (2, 'Found', 'Black Calculator', 'Casio fx-991, found near library entrance.', 'Library', '9000000002', ?)`, args: [tid] });
   }
 }
 
@@ -348,10 +256,6 @@ async function nextLoginId(role) {
   const next = row ? Number(row.login_id.slice(3)) + 1 : 1;
   return `${prefix}${String(next).padStart(3, "0")}`;
 }
-
-// ════════════════════════════════════════════════════════════
-// AUTH & USER FUNCTIONS
-// ════════════════════════════════════════════════════════════
 
 export async function admissionRecord(admissionNumber) {
   if (!admissionNumber) return null;
@@ -485,10 +389,6 @@ export async function recordLogin(userId, role, result, detail = "") {
   await db.execute({ sql: `INSERT INTO login_history (user_id, role, result, detail) VALUES (?, ?, ?, ?)`, args: [userId, role, result, detail] });
 }
 
-// ════════════════════════════════════════════════════════════
-// DASHBOARD
-// ════════════════════════════════════════════════════════════
-
 export async function getDashboardState(session) {
   const users = all(await db.execute({ sql: `SELECT ${userSelect} FROM auth_users ORDER BY requested_at DESC, id DESC`, args: [] })).map(publicUser);
   const attendance = all(await db.execute({
@@ -497,10 +397,6 @@ export async function getDashboardState(session) {
   }));
   const notifications = all(await db.execute({ sql: `SELECT id, message, created_at AS createdAt, read_at AS readAt FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 20`, args: [session.id] }));
   const loginHistory = all(await db.execute({ sql: `SELECT login_at AS loginAt, result, detail FROM login_history WHERE user_id = ? ORDER BY login_at DESC LIMIT 20`, args: [session.id] }));
-
-  // Common: notices + upcoming events (role-filtered)
-  const notices = await getNotices({ role: session.role });
-  const upcomingEvents = await getUpcomingEvents({ role: session.role });
 
   if (session.role === "student") {
     const classAttendance = all(await db.execute({
@@ -515,11 +411,7 @@ export async function getDashboardState(session) {
       sql: `SELECT a.id, a.title, a.description, a.max_marks AS maxMarks, a.due_date AS dueDate, s.name AS subjectName, COALESCE(sub.status, 'Pending') AS submissionStatus, sub.marks_obtained AS marksObtained FROM assignments a JOIN subjects s ON s.id = a.subject_id LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id AND sub.student_user_id = ? ORDER BY a.due_date ASC`,
       args: [session.id]
     }));
-    const myTasks = await getMyTasks(session.id);
-    const myComplaints = await getMyComplaints(session.id);
-    const lostFoundItems = await getLostFoundItems({ status: "Open" });
-
-    return { me: session, attendance: attendance.filter(i => i.studentUserId === session.id), classAttendance, testMarks, myAssignments, notifications, loginHistory, notices, upcomingEvents, myTasks, myComplaints, lostFoundItems };
+    return { me: session, attendance: attendance.filter(i => i.studentUserId === session.id), classAttendance, testMarks, myAssignments, notifications, loginHistory };
   }
 
   if (session.role === "teacher") {
@@ -541,25 +433,11 @@ export async function getDashboardState(session) {
       args: []
     })) : [];
 
-    const myTasks = await getMyTasks(session.id);
-    const assignedTasks = await getAssignedTasks(session.id);
-    const myComplaints = await getMyComplaints(session.id);
-    const lostFoundItems = await getLostFoundItems({ status: "Open" });
-
-    return { me: session, requests: users.filter(u => u.role === "student" && u.status === "Pending" && u.admissionNumber), students: users.filter(u => u.role === "student" && u.status === "Approved"), attendance, subjects: mySubjects, classAttendance, testMarks, assignments, notifications, loginHistory, notices, upcomingEvents, myTasks, assignedTasks, myComplaints, lostFoundItems };
+    return { me: session, requests: users.filter(u => u.role === "student" && u.status === "Pending" && u.admissionNumber), students: users.filter(u => u.role === "student" && u.status === "Approved"), attendance, subjects: mySubjects, classAttendance, testMarks, assignments, notifications, loginHistory };
   }
 
-  // Admin
-  const allComplaints = await getAllComplaints();
-  const allLostFound = await getLostFoundItems({ status: null });
-  const allEvents = await getAllEvents();
-
-  return { me: session, requests: users.filter(u => u.status === "Pending"), users, attendance, notifications, loginHistory, notices, upcomingEvents, allComplaints, allLostFound, allEvents };
+  return { me: session, requests: users.filter(u => u.status === "Pending"), users, attendance, notifications, loginHistory };
 }
-
-// ════════════════════════════════════════════════════════════
-// ATTENDANCE & SUBJECTS
-// ════════════════════════════════════════════════════════════
 
 export async function upsertAttendance({ studentUserId, classDate, status, markedBy }) {
   await db.execute({ sql: `INSERT INTO attendance (student_user_id, class_date, status, marked_by, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(student_user_id, class_date) DO UPDATE SET status = excluded.status, marked_by = excluded.marked_by, updated_at = CURRENT_TIMESTAMP`, args: [studentUserId, classDate, status, markedBy] });
@@ -656,234 +534,4 @@ export async function addTeacherByAdmin({ name, email, password }) {
   }
   const user = publicUser(first(await db.execute({ sql: `SELECT ${userSelect} FROM auth_users WHERE login_id = ?`, args: [loginId] })));
   return { id: user.id, loginId: user.loginId, name: user.name, email: user.email, role: "teacher", status: "Approved" };
-}
-
-// ════════════════════════════════════════════════════════════
-// NOTICES
-// ════════════════════════════════════════════════════════════
-
-export async function createNotice({ title, body, targetRole = "all", priority = "normal", createdBy, expiresAt = null }) {
-  const result = await db.execute({
-    sql: `INSERT INTO notices (title, body, target_role, priority, created_by, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [title.trim(), body.trim(), targetRole, priority, createdBy, expiresAt]
-  });
-  return result.lastInsertRowid;
-}
-
-export async function getNotices({ role = "all", includeExpired = false } = {}) {
-  const expiryCond = includeExpired ? "" : `AND (n.expires_at IS NULL OR n.expires_at > datetime('now'))`;
-  const roleCond = role === "all" ? "" : `AND (n.target_role = 'all' OR n.target_role = ?)`;
-  const args = role === "all" ? [] : [role];
-  return all(await db.execute({
-    sql: `SELECT n.id, n.title, n.body, n.target_role AS targetRole, n.priority,
-                 n.created_at AS createdAt, n.expires_at AS expiresAt,
-                 u.name AS createdByName, u.role AS createdByRole
-          FROM notices n JOIN auth_users u ON u.id = n.created_by
-          WHERE 1=1 ${roleCond} ${expiryCond}
-          ORDER BY CASE n.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END,
-                   n.created_at DESC`,
-    args
-  }));
-}
-
-export async function deleteNotice(noticeId, requesterId, requesterRole) {
-  const row = first(await db.execute({ sql: `SELECT created_by FROM notices WHERE id = ?`, args: [noticeId] }));
-  if (!row) throw new Error("Notice not found.");
-  if (requesterRole !== "admin" && row.created_by !== requesterId) throw new Error("Not authorized.");
-  await db.execute({ sql: `DELETE FROM notices WHERE id = ?`, args: [noticeId] });
-  return true;
-}
-
-// ════════════════════════════════════════════════════════════
-// TASKS
-// ════════════════════════════════════════════════════════════
-
-export async function createTask({ title, description = "", assignedTo, assignedBy, dueDate = null, priority = "normal" }) {
-  const result = await db.execute({
-    sql: `INSERT INTO tasks (title, description, assigned_to, assigned_by, due_date, priority) VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [title.trim(), description.trim(), assignedTo, assignedBy, dueDate, priority]
-  });
-  await addNotification(assignedTo, `You have a new task: "${title}"`);
-  return result.lastInsertRowid;
-}
-
-export async function getMyTasks(userId) {
-  return all(await db.execute({
-    sql: `SELECT t.id, t.title, t.description, t.due_date AS dueDate, t.priority,
-                 t.status, t.created_at AS createdAt, t.updated_at AS updatedAt,
-                 u.name AS assignedByName
-          FROM tasks t JOIN auth_users u ON u.id = t.assigned_by
-          WHERE t.assigned_to = ?
-          ORDER BY CASE t.priority WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
-                   t.due_date ASC NULLS LAST`,
-    args: [userId]
-  }));
-}
-
-export async function getAssignedTasks(assignedBy) {
-  return all(await db.execute({
-    sql: `SELECT t.id, t.title, t.description, t.due_date AS dueDate, t.priority,
-                 t.status, t.created_at AS createdAt,
-                 u.name AS assignedToName, u.login_id AS assignedToId
-          FROM tasks t JOIN auth_users u ON u.id = t.assigned_to
-          WHERE t.assigned_by = ?
-          ORDER BY t.created_at DESC`,
-    args: [assignedBy]
-  }));
-}
-
-export async function updateTaskStatus(taskId, userId, status) {
-  const row = first(await db.execute({ sql: `SELECT assigned_to FROM tasks WHERE id = ?`, args: [taskId] }));
-  if (!row) throw new Error("Task not found.");
-  if (row.assigned_to !== userId) throw new Error("Not authorized.");
-  await db.execute({ sql: `UPDATE tasks SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, args: [status, taskId] });
-  return true;
-}
-
-export async function deleteTask(taskId, requesterId, requesterRole) {
-  const row = first(await db.execute({ sql: `SELECT assigned_by FROM tasks WHERE id = ?`, args: [taskId] }));
-  if (!row) throw new Error("Task not found.");
-  if (requesterRole !== "admin" && row.assigned_by !== requesterId) throw new Error("Not authorized.");
-  await db.execute({ sql: `DELETE FROM tasks WHERE id = ?`, args: [taskId] });
-  return true;
-}
-
-// ════════════════════════════════════════════════════════════
-// EVENTS
-// ════════════════════════════════════════════════════════════
-
-export async function createEvent({ title, description = "", location = "", eventDate, eventTime = "00:00", targetRole = "all", createdBy }) {
-  const result = await db.execute({
-    sql: `INSERT INTO events (title, description, location, event_date, event_time, target_role, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    args: [title.trim(), description.trim(), location.trim(), eventDate, eventTime, targetRole, createdBy]
-  });
-  return result.lastInsertRowid;
-}
-
-export async function getUpcomingEvents({ role = "all" } = {}) {
-  const roleCond = role === "all" ? "" : `AND (e.target_role = 'all' OR e.target_role = ?)`;
-  const args = role === "all" ? [] : [role];
-  return all(await db.execute({
-    sql: `SELECT e.id, e.title, e.description, e.location, e.event_date AS eventDate,
-                 e.event_time AS eventTime, e.target_role AS targetRole,
-                 e.created_at AS createdAt, u.name AS createdByName
-          FROM events e JOIN auth_users u ON u.id = e.created_by
-          WHERE e.event_date >= date('now') ${roleCond}
-          ORDER BY e.event_date ASC, e.event_time ASC`,
-    args
-  }));
-}
-
-export async function getAllEvents({ role = "all" } = {}) {
-  const roleCond = role === "all" ? "" : `AND (e.target_role = 'all' OR e.target_role = ?)`;
-  const args = role === "all" ? [] : [role];
-  return all(await db.execute({
-    sql: `SELECT e.id, e.title, e.description, e.location, e.event_date AS eventDate,
-                 e.event_time AS eventTime, e.target_role AS targetRole,
-                 e.created_at AS createdAt, u.name AS createdByName
-          FROM events e JOIN auth_users u ON u.id = e.created_by
-          WHERE 1=1 ${roleCond}
-          ORDER BY e.event_date DESC`,
-    args
-  }));
-}
-
-export async function deleteEvent(eventId, requesterId, requesterRole) {
-  const row = first(await db.execute({ sql: `SELECT created_by FROM events WHERE id = ?`, args: [eventId] }));
-  if (!row) throw new Error("Event not found.");
-  if (requesterRole !== "admin" && row.created_by !== requesterId) throw new Error("Not authorized.");
-  await db.execute({ sql: `DELETE FROM events WHERE id = ?`, args: [eventId] });
-  return true;
-}
-
-// ════════════════════════════════════════════════════════════
-// COMPLAINTS
-// ════════════════════════════════════════════════════════════
-
-export async function fileComplaint({ subject, body = "", category = "General", filedBy }) {
-  const result = await db.execute({
-    sql: `INSERT INTO complaints (subject, body, category, filed_by) VALUES (?, ?, ?, ?)`,
-    args: [subject.trim(), body.trim(), category, filedBy]
-  });
-  return result.lastInsertRowid;
-}
-
-export async function getMyComplaints(userId) {
-  return all(await db.execute({
-    sql: `SELECT id, subject, body, category, status, resolution_note AS resolutionNote,
-                 filed_at AS filedAt, resolved_at AS resolvedAt
-          FROM complaints WHERE filed_by = ? ORDER BY filed_at DESC`,
-    args: [userId]
-  }));
-}
-
-export async function getAllComplaints() {
-  return all(await db.execute({
-    sql: `SELECT c.id, c.subject, c.body, c.category, c.status,
-                 c.resolution_note AS resolutionNote, c.filed_at AS filedAt,
-                 c.resolved_at AS resolvedAt,
-                 u.name AS filedByName, u.role AS filedByRole, u.login_id AS filedById,
-                 r.name AS resolvedByName
-          FROM complaints c
-          JOIN auth_users u ON u.id = c.filed_by
-          LEFT JOIN auth_users r ON r.id = c.resolved_by
-          ORDER BY CASE c.status WHEN 'Open' THEN 1 WHEN 'In Review' THEN 2 ELSE 3 END,
-                   c.filed_at DESC`,
-    args: []
-  }));
-}
-
-export async function resolveComplaint({ complaintId, status, resolutionNote = "", resolvedBy }) {
-  if (!["In Review", "Resolved", "Dismissed"].includes(status)) throw new Error("Invalid status.");
-  const resolvedAt = (status === "Resolved" || status === "Dismissed") ? `CURRENT_TIMESTAMP` : `NULL`;
-  await db.execute({
-    sql: `UPDATE complaints SET status = ?, resolution_note = ?, resolved_by = ?, resolved_at = ${resolvedAt} WHERE id = ?`,
-    args: [status, resolutionNote.trim(), resolvedBy, complaintId]
-  });
-  const row = first(await db.execute({ sql: `SELECT filed_by FROM complaints WHERE id = ?`, args: [complaintId] }));
-  if (row) await addNotification(row.filed_by, `Your complaint status has been updated to "${status}".`);
-  return true;
-}
-
-// ════════════════════════════════════════════════════════════
-// LOST & FOUND
-// ════════════════════════════════════════════════════════════
-
-export async function reportLostFound({ type, itemName, description = "", location = "", contact = "", reportedBy }) {
-  const result = await db.execute({
-    sql: `INSERT INTO lost_found (type, item_name, description, location, contact, reported_by) VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [type, itemName.trim(), description.trim(), location.trim(), contact.trim(), reportedBy]
-  });
-  return result.lastInsertRowid;
-}
-
-export async function getLostFoundItems({ type = null, status = "Open" } = {}) {
-  const typeCond = type ? `AND lf.type = ?` : "";
-  const statusCond = status ? `AND lf.status = ?` : "";
-  const args = [];
-  if (type) args.push(type);
-  if (status) args.push(status);
-  return all(await db.execute({
-    sql: `SELECT lf.id, lf.type, lf.item_name AS itemName, lf.description,
-                 lf.location, lf.contact, lf.status,
-                 lf.reported_at AS reportedAt, lf.closed_at AS closedAt,
-                 u.name AS reportedByName, u.login_id AS reportedById
-          FROM lost_found lf JOIN auth_users u ON u.id = lf.reported_by
-          WHERE 1=1 ${typeCond} ${statusCond}
-          ORDER BY lf.reported_at DESC`,
-    args
-  }));
-}
-
-export async function closeLostFoundItem(itemId, requesterId, requesterRole) {
-  const row = first(await db.execute({ sql: `SELECT reported_by FROM lost_found WHERE id = ?`, args: [itemId] }));
-  if (!row) throw new Error("Item not found.");
-  if (requesterRole !== "admin" && row.reported_by !== requesterId) throw new Error("Not authorized.");
-  await db.execute({ sql: `UPDATE lost_found SET status = 'Closed', closed_at = CURRENT_TIMESTAMP WHERE id = ?`, args: [itemId] });
-  return true;
-}
-
-export async function claimLostFoundItem(itemId) {
-  await db.execute({ sql: `UPDATE lost_found SET status = 'Claimed', closed_at = CURRENT_TIMESTAMP WHERE id = ?`, args: [itemId] });
-  return true;
 }
