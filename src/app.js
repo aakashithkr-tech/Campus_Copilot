@@ -83,6 +83,15 @@ async function refreshState() {
   const serverData = await api(API_BASE + "/api/state");
   state = { ...structuredClone(defaultState), ...serverData };
 
+  // Everyone needs the full subject list so students can pick the right
+  // subject (and therefore the right teacher) when asking a question.
+  try {
+    const subjectsData = await api("/api/subjects");
+    state.allSubjects = subjectsData.subjects || [];
+  } catch (e) {
+    console.warn("Could not load subjects:", e.message);
+  }
+
   // Admin: load real users, teachers, subjects
   if (session?.role === "admin") {
     try {
@@ -784,7 +793,12 @@ function eventsPage() {
 
 function supportPage() {
   const realName = (state.me?.name || session?.name || "").toLowerCase().trim();
+  const myId = state.me?.id ?? session?.userId;
   const mine = state.complaints.filter((item) => (item.submittedBy || "").toLowerCase().trim() === realName);
+  const myQuestionsList = (state.questions || []).filter((item) => {
+    if (myId != null && item.askedBy != null) return String(item.askedBy) === String(myId);
+    return (item.student || "").toLowerCase().trim() === realName;
+  });
   return `
     <div class="welcome-row">
       <div>
@@ -802,6 +816,10 @@ function supportPage() {
       <section class="panel">
         ${panelHeader("Your requests", "Follow status updates from the administration")}
         <div class="request-list">${mine.map((item) => requestRow(item)).join("") || emptyState("No requests yet.", "Use the button above when you need help.")}</div>
+      </section>
+      <section class="panel">
+        ${panelHeader("Your questions", "Track answers from your teachers")}
+        <div class="request-list">${myQuestionsList.map((item) => myQuestionRow(item)).join("") || emptyState("No questions yet.", "Ask your teacher using the button above.")}</div>
       </section>
       <section class="panel">
         ${panelHeader("Lost and found board", "Recent items shared by the campus")}
@@ -1572,6 +1590,21 @@ function lostRow(item, admin = false) {
     </article>`;
 }
 
+function myQuestionRow(item) {
+  return `
+    <article class="request-row">
+      <span class="request-icon">${icon("chat")}</span>
+      <div>
+        <span><strong>${escapeHTML(item.question)}</strong><em class="status ${item.status.toLowerCase()}">${item.status}</em></span>
+        <small>${escapeHTML(item.course || "")} · ${escapeHTML(item.asked || "")}</small>
+        ${item.answer
+          ? `<div class="answer-block"><span>${icon("check")} Teacher's answer</span><p>${escapeHTML(item.answer)}</p></div>`
+          : `<small style="color:var(--muted)">Waiting for your teacher's answer…</small>`}
+      </div>
+      <button class="text-button" style="color:var(--coral)" data-delete-question="${item.id}">${icon("close")} Delete</button>
+    </article>`;
+}
+
 function questionRow(item) {
   return `<article class="question-row"><span class="avatar small">${item.initials}</span><div><strong>${item.question}</strong><small>${item.student} · ${item.course} · ${item.asked}</small></div><button data-answer="${item.id}">Answer ${icon("arrow")}</button></article>`;
 }
@@ -1697,7 +1730,11 @@ function renderModal() {
     question: {
       eyebrow: "Ask a question",
       title: "What would you like to ask your teacher?",
-      fields: `<label>Subject/Course<input id="modal-title" required placeholder="e.g. Database Systems" /></label><label>Your question<textarea id="modal-detail" rows="4" required placeholder="Type your question here..."></textarea></label>`,
+      fields: `<label>Subject<select id="modal-title" required>${
+        (state.allSubjects || []).length
+          ? (state.allSubjects || []).map(s => `<option value="${s.id}">${escapeHTML(s.name)} (${escapeHTML(s.code)})${s.teacherName ? ` · ${escapeHTML(s.teacherName)}` : " · Unassigned"}</option>`).join("")
+          : `<option value="">No subjects available yet</option>`
+      }</select></label><label>Your question<textarea id="modal-detail" rows="4" required placeholder="Type your question here..."></textarea></label>`,
       button: "Submit question",
     },
   };
@@ -2180,6 +2217,17 @@ function bindEvents() {
     // Yeh line add karo:
   });
 
+  document.querySelectorAll("[data-delete-question]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (!confirm("Delete this question? This cannot be undone.")) return;
+      await mutate(
+        `/api/questions/${encodeURIComponent(button.dataset.deleteQuestion)}`,
+        { method: "DELETE" },
+        "Question deleted.",
+      );
+    });
+  });
+
   document.querySelectorAll("[data-toggle-user]").forEach((button) => {
     button.addEventListener("click", async () => {
       const user = state.users.find((item) => item.id === button.dataset.toggleUser);
@@ -2589,11 +2637,23 @@ async function handleUtilityForm(event) {
   }
   if (modal.type === "question") {
     const studentName = state.me?.name || session?.name || "Student";
+    const subject = (state.allSubjects || []).find((s) => String(s.id) === String(title));
+    if (!subject) {
+      showToast("Please select a valid subject.", "error");
+      return;
+    }
+    if (!subject.teacherId) {
+      showToast("This subject has no teacher assigned yet. Please pick another subject.", "error");
+      return;
+    }
     const newQuestion = {
       id: `question-${Date.now()}`,
       initials: studentName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2),
       student: studentName,
-      course: title,
+      course: subject.name,
+      subjectId: subject.id,
+      teacherId: subject.teacherId,
+      askedBy: state.me?.id ?? session?.userId ?? null,
       asked: new Date().toLocaleDateString("en-IN", {day:"numeric",month:"short",year:"numeric"}),
       question: detail,
       status: "Open",

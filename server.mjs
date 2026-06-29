@@ -319,12 +319,20 @@ createServer(async (req, res) => {
         const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
         const dbState = await getDashboardState(session);
+
+        // Teachers/faculty should only see questions addressed to the subject
+        // that is actually assigned to them (not every student question).
+        const visibleQuestions =
+          session.role === "teacher" || session.role === "faculty"
+            ? questionsStore.filter((q) => String(q.teacherId ?? "") === String(session.id))
+            : questionsStore;
+
         json(res, 200, {
           ...dbState,
           notices:    noticesStore,
           tasks:      tasksStore,
           events:     eventsStore,
-          questions:  questionsStore,
+          questions:  visibleQuestions,
           complaints: complaintsStore,
           lostFound:  lostFoundStore,
           users:      usersStore,
@@ -699,6 +707,7 @@ createServer(async (req, res) => {
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
         if (req.method === "POST") {
           const body = await readBody(req);
+          body.askedBy = body.askedBy ?? session.id;
           questionsStore.push(body);
           json(res, 201, { question: body }); return;
         }
@@ -715,6 +724,20 @@ createServer(async (req, res) => {
         questionsStore[idx].answer = body.answer;
         questionsStore[idx].status = "Answered";
         json(res, 200, { question: questionsStore[idx] }); return;
+      }
+
+      if (req.method === "DELETE" && pathname.startsWith("/api/questions/")) {
+        const session = await getSession(bearerToken(req));
+        if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
+        const id = decodeURIComponent(pathname.split("/api/questions/")[1]);
+        const idx = questionsStore.findIndex(q => q.id === id);
+        if (idx === -1) { json(res, 404, { error: "Question not found." }); return; }
+        const owns = String(questionsStore[idx].askedBy ?? "") === String(session.id);
+        if (!owns && session.role !== "admin") {
+          json(res, 403, { error: "You can only delete your own question." }); return;
+        }
+        questionsStore.splice(idx, 1);
+        json(res, 200, { message: "Question deleted." }); return;
       }
 
       if (req.method === "PATCH" && pathname.match(/^\/api\/users\/.+\/status$/)) {
