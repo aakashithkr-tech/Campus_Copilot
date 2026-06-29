@@ -796,6 +796,7 @@ function supportPage() {
     <div class="support-actions">
       <button class="support-action coral" data-action="new-complaint"><span>${icon("support")}</span><strong>Raise a campus request</strong><small>Facilities, IT, academics, or general help</small>${icon("arrow")}</button>
       <button class="support-action violet" data-action="new-lost"><span>${icon("search")}</span><strong>Report lost or found</strong><small>Post an item and connect with the campus</small>${icon("arrow")}</button>
+      <button class="support-action blue" data-action="new-question"><span>${icon("chat")}</span><strong>Ask your teacher a question</strong><small>Get help directly from faculty</small>${icon("arrow")}</button>
     </div>
     <div class="dashboard-grid even">
       <section class="panel">
@@ -1693,6 +1694,12 @@ function renderModal() {
       fields: `<label>Full Name<input id="modal-title" required placeholder="e.g. Dr. Anita Singh" /></label><label>Email<input id="modal-category" type="email" required placeholder="teacher@college.edu" /></label><label>Temporary Password<input id="modal-detail" type="password" required placeholder="Min 6 characters" /></label>`,
       button: "Create Teacher",
     },
+    question: {
+      eyebrow: "Ask a question",
+      title: "What would you like to ask your teacher?",
+      fields: `<label>Subject/Course<input id="modal-title" required placeholder="e.g. Database Systems" /></label><label>Your question<textarea id="modal-detail" rows="4" required placeholder="Type your question here..."></textarea></label>`,
+      button: "Submit question",
+    },
   };
   const config = forms[modal.type];
   if (!config) return "";
@@ -2400,6 +2407,10 @@ async function handleAction(action, event, button = event?.target?.closest('[dat
     modal = { type: "lost" };
     render();
   }
+  if (action === "new-question") {
+    modal = { type: "question" };
+    render();
+  }
   if (action === "add-task") {
     modal = { type: "task" };
     render();
@@ -2550,7 +2561,7 @@ function updatePreview() {
 async function handleUtilityForm(event) {
   event.preventDefault();
   const title = document.querySelector("#modal-title").value.trim();
-  const category = document.querySelector("#modal-category").value;
+  const category = document.querySelector("#modal-category")?.value || "";
   const detail = document.querySelector("#modal-detail").value.trim();
   if (modal.type === "complaint") {
     const complaint = {
@@ -2575,6 +2586,20 @@ async function handleUtilityForm(event) {
       contact: state.me?.name || session?.name || "Student",
     };
     if (!(await mutate("/api/lost-found", { method: "POST", body: item }, "Lost and found post published."))) return;
+  }
+  if (modal.type === "question") {
+    const studentName = state.me?.name || session?.name || "Student";
+    const newQuestion = {
+      id: `question-${Date.now()}`,
+      initials: studentName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2),
+      student: studentName,
+      course: title,
+      asked: new Date().toLocaleDateString("en-IN", {day:"numeric",month:"short",year:"numeric"}),
+      question: detail,
+      status: "Open",
+      answer: "",
+    };
+    if (!(await mutate("/api/questions", { method: "POST", body: newQuestion }, "Question submitted to your teacher."))) return;
   }
   if (modal.type === "add-teacher") {
     const name = title;

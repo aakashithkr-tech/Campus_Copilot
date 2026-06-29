@@ -694,6 +694,17 @@ createServer(async (req, res) => {
         json(res, 200, { item: lostFoundStore[idx] }); return;
       }
 
+      if (pathname === "/api/questions") {
+        const session = await getSession(bearerToken(req));
+        if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
+        if (req.method === "POST") {
+          const body = await readBody(req);
+          questionsStore.push(body);
+          json(res, 201, { question: body }); return;
+        }
+        json(res, 200, { questions: questionsStore }); return;
+      }
+
       if (req.method === "PATCH" && pathname.match(/^\/api\/questions\/.+\/answer$/)) {
         const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
