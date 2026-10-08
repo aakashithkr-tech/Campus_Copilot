@@ -88,8 +88,14 @@ async function refreshState() {
   try {
     const subjectsData = await api("/api/subjects");
     state.allSubjects = subjectsData.subjects || [];
+    
+    // Also load profile for the logged in user
+    if (session) {
+      const profileData = await api("/api/profile");
+      state.myProfile = profileData.profile || {};
+    }
   } catch (e) {
-    console.warn("Could not load subjects:", e.message);
+    console.warn("Could not load subjects/profile:", e.message);
   }
 
   // Admin: load real users, teachers, subjects
@@ -398,9 +404,9 @@ function appShell() {
           </a>
           <button class="icon-button mobile-only" data-action="close-sidebar" aria-label="Close menu">${icon("close")}</button>
         </div>
-        <div class="campus-switcher" style="flex-shrink:0">
-          <span class="campus-logo">WC</span>
-          <div><strong>WebNova College</strong><small>Smart campus workspace</small></div>
+        <div class="campus-switcher" style="flex-shrink:0; cursor:pointer" data-action="view-profile">
+          <span class="campus-logo" style="background: linear-gradient(135deg, var(--primary), var(--violet)); color: white; border: none;">${escapeHTML(initials)}</span>
+          <div><strong>${escapeHTML(displayName)}</strong><small>View Profile & Links</small></div>
           ${icon("chevron")}
         </div>
         <nav class="sidebar-nav" style="flex:1;overflow-y:auto;overflow-x:hidden;min-height:0">
@@ -1690,6 +1696,163 @@ function renderModal() {
     );
   }
 
+  if (modal.type === "profile") {
+    const p = state.myProfile || {};
+    const u = state.me || {};
+    const initials = (u.name || "User").split(" ").map(w=>w[0]).join("").toUpperCase().slice(0, 2);
+    
+    // Convert comma separated skills into array
+    const skillsList = (p.skills || "").split(",").map(s => s.trim()).filter(s => s);
+    const skillsHtml = skillsList.map(s => `<span class="skill-tag">${escapeHTML(s)} ${icon("close")}</span>`).join("");
+    
+    // Calculate profile strength
+    let score = 0;
+    if (u.name) score += 20;
+    if (p.course && p.year) score += 20;
+    if (skillsList.length > 0) score += 20;
+    if (p.linkedin) score += 20;
+    if (p.portfolio) score += 20;
+    
+    return `
+    <div class="profile-modal-backdrop" data-action="close-modal">
+      <div class="profile-modal-container" role="dialog" aria-modal="true" data-modal-box>
+        <!-- Sidebar -->
+        <div class="profile-sidebar">
+          <div class="avatar-section">
+            <div class="avatar-circle">${initials} <button type="button" class="camera-btn">${icon("camera")}</button></div>
+            <h3>${escapeHTML(u.name || "My Profile")}</h3>
+            <p>${escapeHTML(u.email || "")}</p>
+            <span class="status-pill">● Active</span>
+          </div>
+          <div class="quick-details">
+            <div>${icon("book")} ${escapeHTML(p.course || "No Course Added")}</div>
+            <div>${icon("calendar")} ${escapeHTML(p.year ? p.year + " Year" : "Year Not Added")}</div>
+            <div>${icon("location")} ${escapeHTML(u.loginId || "")}</div>
+          </div>
+          <div class="profile-strength">
+            <div class="strength-header">
+              <h4>Profile Strength</h4>
+              <div class="strength-ring">${score}%</div>
+            </div>
+            <ul class="strength-checklist">
+              <li class="${u.name ? 'done' : 'missing'}">Basic details</li>
+              <li class="${p.course && p.year ? 'done' : 'missing'}">Academic info</li>
+              <li class="${skillsList.length > 0 ? 'done' : 'missing'}">Skills added</li>
+              <li class="${p.linkedin ? 'done' : 'missing'}">LinkedIn connected</li>
+              <li class="${p.portfolio ? 'done' : 'missing'}">Portfolio missing</li>
+            </ul>
+            <p class="strength-quote">"Keep learning, keep growing and build your future."</p>
+          </div>
+        </div>
+        
+        <!-- Content -->
+        <div class="profile-content">
+          <button class="profile-close-btn" data-action="close-modal">${icon("close")}</button>
+          
+          <div class="profile-header">
+            <h2>${icon("user")} Student Profile</h2>
+            <p>Manage your academic and professional details here.</p>
+          </div>
+          
+          <div class="profile-tabs">
+            <button type="button" class="active">${icon("file")} Basic Information</button>
+            <button type="button">${icon("sparkles")} Skills</button>
+            <button type="button">${icon("link")} Links</button>
+            <button type="button">${icon("settings")} Preferences</button>
+          </div>
+          
+          <form id="profile-form" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+            <div class="profile-scroll-area">
+              
+              <!-- Academic Information -->
+              <div class="profile-section">
+                <div class="section-title">
+                  ${icon("briefcase")}
+                  <div>
+                    <h3>Academic Information</h3>
+                    <p>Your current academic details help us personalize your experience.</p>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <label>Course / Major <span class="req">*</span>
+                    <div class="input-with-icon">
+                      ${icon("book")}
+                      <input type="text" name="course" value="${escapeHTML(p.course || "")}" placeholder="Computer Science (CS)">
+                    </div>
+                  </label>
+                  <label>Year of Study <span class="req">*</span>
+                    <div class="input-with-icon">
+                      ${icon("calendar")}
+                      <select name="year">
+                        <option value="1st" ${p.year==='1st'?'selected':''}>1st Year</option>
+                        <option value="2nd" ${p.year==='2nd'?'selected':''}>2nd Year</option>
+                        <option value="3rd" ${p.year==='3rd'?'selected':''}>3rd Year</option>
+                        <option value="4th" ${p.year==='4th'?'selected':''}>4th Year</option>
+                      </select>
+                    </div>
+                  </label>
+                </div>
+              </div>
+              
+              <!-- Key Skills -->
+              <div class="profile-section">
+                <div class="section-title">
+                  ${icon("sparkles")}
+                  <div>
+                    <h3>Key Skills</h3>
+                    <p>Add the technologies and tools you are comfortable with.</p>
+                  </div>
+                  <button type="button" class="ghost-button">+ Add Skill</button>
+                </div>
+                <div class="skills-input-area">
+                  <div class="skills-tags">${skillsHtml}</div>
+                  <input type="text" name="skills" value="${escapeHTML(p.skills || "")}" placeholder="e.g. React, Node.js, Python...">
+                </div>
+              </div>
+              
+              <!-- Professional Profiles -->
+              <div class="profile-section">
+                <div class="section-title">
+                  ${icon("link")}
+                  <div>
+                    <h3>Professional Profiles</h3>
+                    <p>Link your professional accounts to showcase your work.</p>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="link-card linkedin">
+                    <label>${icon("link")} LinkedIn URL</label>
+                    <input type="url" name="linkedin" value="${escapeHTML(p.linkedin || "")}" placeholder="https://linkedin.com/in/...">
+                  </div>
+                  <div class="link-card leetcode">
+                    <label>${icon("link")} LeetCode URL</label>
+                    <input type="url" name="leetcode" value="${escapeHTML(p.leetcode || "")}" placeholder="https://leetcode.com/u/...">
+                  </div>
+                  <div class="link-card github">
+                    <label>${icon("link")} GitHub URL</label>
+                    <input type="url" name="github" value="${escapeHTML(p.github || "")}" placeholder="https://github.com/...">
+                  </div>
+                  <div class="link-card portfolio">
+                    <label>${icon("link")} Portfolio URL</label>
+                    <input type="url" name="portfolio" value="${escapeHTML(p.portfolio || "")}" placeholder="https://...">
+                  </div>
+                </div>
+              </div>
+              
+            </div>
+            
+            <div class="profile-footer">
+              <button type="button" class="ghost-button" data-action="close-modal">Cancel</button>
+              <button type="submit" class="primary-button">${icon("check")} Save Profile</button>
+            </div>
+          </form>
+          
+        </div>
+      </div>
+    </div>
+    `;
+  }
+
   if (modal.type === "answer") {
     const question = state.questions.find((item) => item.id === modal.id);
     return modalFrame(`
@@ -1863,6 +2026,17 @@ function bindEvents() {
       selectedRole = button.dataset.role;
       render();
     });
+  });
+
+  // Profile Form
+  document.querySelector("#profile-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    const success = await mutate("/api/profile", { method: "POST", body: data }, "Profile updated!");
+    if (success) {
+      modal = null;
+      render();
+    }
   });
 
   // 2. Register Form → Request OTP (Step 1)
@@ -2415,6 +2589,11 @@ async function handleAction(action, event, button = event?.target?.closest('[dat
   }
   if (action === "go-forgot-password") {
     currentPage = "forgot-password";
+    render();
+    return;
+  }
+  if (action === "view-profile") {
+    modal = { type: "profile" };
     render();
     return;
   }

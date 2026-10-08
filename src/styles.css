@@ -595,6 +595,7 @@ svg {
 .login-form label,
 .publish-form label,
 .utility-fields label,
+#profile-form label,
 #answer-form label {
   color: #454c60;
   display: flex;
@@ -4090,3 +4091,78 @@ body.dark .copilot-icon {
 
 .upload-zone.is-dragging { background: var(--violet-soft); border-color: var(--violet) !important; }
 .upload-zone.is-loading { opacity: .6; pointer-events: none; }
+
+/* Gorgeous Profile Modal Styles */
+.profile-modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:9999; backdrop-filter:blur(4px); padding:20px; }
+.profile-modal-container { display:flex; width:100%; max-width:960px; height:85vh; max-height:700px; background:var(--surface); border-radius:16px; overflow:hidden; box-shadow:0 24px 48px rgba(0,0,0,0.2); animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1); }
+.profile-sidebar { width:300px; background:linear-gradient(135deg, #24265D, #161838); color:white; padding:32px 24px; display:flex; flex-direction:column; gap:24px; position:relative; overflow-y:auto; }
+.profile-sidebar::before { content:''; position:absolute; top:0; left:0; right:0; height:150px; background:linear-gradient(to bottom, rgba(255,255,255,0.05), transparent); pointer-events:none; }
+.avatar-section { display:flex; flex-direction:column; align-items:center; text-align:center; position:relative; z-index:1; }
+.avatar-circle { width:96px; height:96px; border-radius:50%; background:linear-gradient(135deg, #a7afff, #7f88ff); color:#161838; font-size:32px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-bottom:16px; position:relative; border:4px solid #343770; }
+.camera-btn { position:absolute; bottom:-4px; right:-4px; background:white; color:#161838; border:none; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); }
+.camera-btn svg { width:16px; height:16px; }
+.avatar-section h3 { margin:0; font-size:20px; font-weight:600; color:white; }
+.avatar-section p { margin:4px 0 12px; font-size:13px; color:rgba(255,255,255,0.7); }
+.status-pill { background:rgba(34,197,94,0.2); color:#4ade80; padding:4px 12px; border-radius:100px; font-size:12px; font-weight:600; border:1px solid rgba(74,222,128,0.3); }
+
+.quick-details { border-top:1px solid rgba(255,255,255,0.1); border-bottom:1px solid rgba(255,255,255,0.1); padding:20px 0; display:flex; flex-direction:column; gap:12px; }
+.quick-details div { display:flex; align-items:center; gap:12px; font-size:14px; color:rgba(255,255,255,0.9); }
+.quick-details svg { width:18px; height:18px; color:rgba(255,255,255,0.5); }
+
+.profile-strength { background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:20px; }
+.strength-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.strength-header h4 { margin:0; font-size:14px; color:rgba(255,255,255,0.9); }
+.strength-ring { width:48px; height:48px; border-radius:50%; border:4px solid #4f46e5; border-top-color:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:white; }
+.strength-checklist { list-style:none; padding:0; margin:0 0 16px 0; display:flex; flex-direction:column; gap:8px; }
+.strength-checklist li { font-size:12px; display:flex; align-items:center; gap:8px; }
+.strength-checklist li::before { content:''; width:12px; height:12px; border-radius:50%; display:inline-block; }
+.strength-checklist li.done::before { background:#3b82f6; }
+.strength-checklist li.done { color:rgba(255,255,255,0.9); }
+.strength-checklist li.missing::before { border:1px solid rgba(255,255,255,0.3); }
+.strength-checklist li.missing { color:rgba(255,255,255,0.5); }
+.strength-quote { font-size:11px; font-style:italic; color:rgba(255,255,255,0.6); margin:0; line-height:1.4; text-align:center; }
+
+.profile-content { flex:1; display:flex; flex-direction:column; background:var(--surface); position:relative; }
+.profile-close-btn { position:absolute; top:24px; right:24px; background:none; border:none; cursor:pointer; color:var(--text-light); z-index:10; }
+.profile-close-btn svg { width:24px; height:24px; }
+.profile-header { padding:32px 40px 0; }
+.profile-header h2 { margin:0; font-size:24px; color:var(--text); display:flex; align-items:center; gap:12px; }
+.profile-header p { margin:6px 0 0; font-size:14px; color:var(--text-light); }
+
+.profile-tabs { display:flex; gap:8px; padding:24px 40px 0; border-bottom:1px solid var(--border); overflow-x:auto; }
+.profile-tabs button { background:none; border:none; padding:12px 20px; font-size:14px; font-weight:500; color:var(--text-light); cursor:pointer; border-bottom:2px solid transparent; display:flex; align-items:center; gap:8px; white-space:nowrap; }
+.profile-tabs button.active { color:var(--primary); border-bottom-color:var(--primary); }
+.profile-tabs button.active svg { color:var(--primary); }
+.profile-tabs button:hover:not(.active) { color:var(--text); background:var(--hover); border-radius:8px 8px 0 0; }
+
+.profile-scroll-area { flex:1; overflow-y:auto; padding:32px 40px; display:flex; flex-direction:column; gap:32px; }
+.profile-section { display:flex; flex-direction:column; gap:20px; }
+.section-title { display:flex; align-items:flex-start; gap:16px; }
+.section-title > svg { width:24px; height:24px; color:var(--primary); padding:8px; background:rgba(79,70,229,0.1); border-radius:8px; flex-shrink:0; }
+.section-title h3 { margin:0 0 4px; font-size:16px; color:var(--text); font-weight:600; }
+.section-title p { margin:0; font-size:13px; color:var(--text-light); }
+.section-title .ghost-button { margin-left:auto; }
+
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.profile-section label { display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:500; color:var(--text); }
+.req { color:#ef4444; }
+.input-with-icon { position:relative; display:flex; align-items:center; }
+.input-with-icon svg { position:absolute; left:12px; width:18px; height:18px; color:var(--text-light); pointer-events:none; }
+.input-with-icon input, .input-with-icon select { width:100%; padding:10px 12px 10px 40px; border:1px solid var(--border); border-radius:8px; font-size:14px; color:var(--text); background:var(--surface); }
+
+.skills-input-area { background:var(--hover); border:1px dashed var(--border); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:12px; }
+.skills-tags { display:flex; flex-wrap:wrap; gap:8px; }
+.skill-tag { background:rgba(79,70,229,0.1); color:var(--primary); padding:6px 12px; border-radius:100px; font-size:13px; font-weight:500; display:flex; align-items:center; gap:6px; }
+.skill-tag svg { width:14px; height:14px; cursor:pointer; }
+.skills-input-area input { border:none; background:transparent; font-size:14px; padding:8px; color:var(--text); outline:none; }
+
+.link-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:12px; }
+.link-card label { display:flex; flex-direction:row; align-items:center; gap:8px; font-size:14px; font-weight:600; }
+.link-card label svg { width:20px; height:20px; }
+.link-card.linkedin label svg { color:#0a66c2; }
+.link-card.leetcode label svg { color:#ffa116; }
+.link-card.github label svg { color:var(--text); }
+.link-card.portfolio label svg { color:var(--primary); }
+.link-card input { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px; background:var(--hover); }
+
+.profile-footer { padding:20px 40px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:16px; background:var(--surface); }

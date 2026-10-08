@@ -30,6 +30,8 @@ import {
   assignSubjectToTeacher,
   addSubjectForAdmin,
   addTeacherByAdmin,
+  getProfile,
+  upsertProfile
 } from "./database.mjs";
 
 const port = Number(process.env.PORT || 4173);
@@ -479,6 +481,23 @@ createServer(async (req, res) => {
           await addOrUpdateMark({ ...rec, recordedBy: session.id });
         }
         json(res, 200, { message: "Marks saved." });
+        return;
+      }
+
+      if (req.method === "GET" && pathname === "/api/profile") {
+        const session = await getSession(bearerToken(req));
+        if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
+        const profile = await getProfile(session.loginId);
+        json(res, 200, { profile });
+        return;
+      }
+
+      if (req.method === "POST" && pathname === "/api/profile") {
+        const session = await getSession(bearerToken(req));
+        if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
+        const body = await readBody(req);
+        await upsertProfile(session.loginId, body);
+        json(res, 200, { message: "Profile saved successfully!" });
         return;
       }
 

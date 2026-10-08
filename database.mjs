@@ -11,6 +11,17 @@ async function exec(sql) {
 }
 
 await exec(`
+  CREATE TABLE IF NOT EXISTS student_profiles (
+    login_id TEXT PRIMARY KEY,
+    course TEXT DEFAULT '',
+    year TEXT DEFAULT '',
+    skills TEXT DEFAULT '',
+    linkedin TEXT DEFAULT '',
+    leetcode TEXT DEFAULT '',
+    github TEXT DEFAULT '',
+    portfolio TEXT DEFAULT ''
+  );
+
   CREATE TABLE IF NOT EXISTS auth_users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     login_id TEXT UNIQUE,
@@ -534,4 +545,25 @@ export async function addTeacherByAdmin({ name, email, password }) {
   }
   const user = publicUser(first(await db.execute({ sql: `SELECT ${userSelect} FROM auth_users WHERE login_id = ?`, args: [loginId] })));
   return { id: user.id, loginId: user.loginId, name: user.name, email: user.email, role: "teacher", status: "Approved" };
+}
+
+export async function getProfile(loginId) {
+  const result = await db.execute({ sql: `SELECT * FROM student_profiles WHERE login_id = ?`, args: [loginId] });
+  return result.rows[0] || { course: "", year: "", skills: "", linkedin: "", leetcode: "", github: "", portfolio: "" };
+}
+
+export async function upsertProfile(loginId, profile) {
+  await db.execute({
+    sql: `INSERT INTO student_profiles (login_id, course, year, skills, linkedin, leetcode, github, portfolio)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(login_id) DO UPDATE SET
+            course = excluded.course,
+            year = excluded.year,
+            skills = excluded.skills,
+            linkedin = excluded.linkedin,
+            leetcode = excluded.leetcode,
+            github = excluded.github,
+            portfolio = excluded.portfolio`,
+    args: [loginId, profile.course || "", profile.year || "", profile.skills || "", profile.linkedin || "", profile.leetcode || "", profile.github || "", profile.portfolio || ""]
+  });
 }
