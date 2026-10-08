@@ -1,3 +1,4 @@
+/* Base modal styling */
 .profile-modal-overlay {
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
   background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(4px);
@@ -5,33 +6,94 @@
   z-index: 1000; padding: 24px; box-sizing: border-box;
 }
 
-.profile-new-modal {
-  width: 100%; max-width: 760px; max-height: calc(100vh - 48px);
-  background: #ffffff; border-radius: 20px;
-  display: flex; flex-direction: column;
+.profile-split-modal {
+  width: 100%; max-width: 900px; height: 85vh; max-height: 700px;
+  background: #ffffff; border-radius: 16px;
+  display: flex; flex-direction: row;
   box-shadow: 0 20px 40px rgba(0,0,0,0.1);
   overflow: hidden;
   font-family: var(--font-body, "DM Sans", sans-serif);
 }
 
-.profile-new-header {
-  display: flex; align-items: center; padding: 24px 32px;
-  border-bottom: 1px solid #f0f0f0; position: relative;
-  background: #fff; z-index: 2;
+/* Sidebar Area */
+.profile-sidebar-split {
+  width: 280px;
+  background: linear-gradient(180deg, #1e1b4b 0%, #312e81 100%);
+  color: #fff;
+  display: flex; flex-direction: column;
+  flex-shrink: 0;
+  position: relative;
 }
 
-.profile-avatar {
-  width: 48px; height: 48px; border-radius: 50%;
-  background: #f3e8ff; color: #7e22ce; font-weight: 700;
+.sidebar-top {
+  padding: 32px 24px;
+  display: flex; flex-direction: column; gap: 32px;
+}
+
+.sidebar-logo {
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.sidebar-logo h3 { margin: 0; font-size: 16px; font-weight: 700; color: #fff; }
+.sidebar-logo p { margin: 4px 0 0; font-size: 12px; color: rgba(255,255,255,0.7); line-height: 1.4; }
+
+.sidebar-user-card {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+
+.sidebar-avatar {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: #e0e7ff; color: #4338ca; font-size: 28px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
-  font-size: 18px; margin-right: 16px; flex-shrink: 0;
+  position: relative; margin-bottom: 16px;
+}
+
+.camera-icon {
+  position: absolute; bottom: 0; right: 0;
+  width: 28px; height: 28px; background: #fff; color: #4b5563;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer;
+}
+.camera-icon svg { width: 14px; height: 14px; }
+
+.sidebar-user-card h4 { margin: 0 0 4px; font-size: 18px; font-weight: 600; color: #fff; }
+.sidebar-user-card p { margin: 0 0 12px; font-size: 13px; color: rgba(255,255,255,0.7); }
+
+.active-badge {
+  background: rgba(34, 197, 94, 0.2); color: #4ade80;
+  padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;
+}
+
+.sidebar-nav {
+  display: flex; flex-direction: column; padding: 0 12px; margin-top: 16px;
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; color: rgba(255,255,255,0.7);
+  font-size: 14px; font-weight: 500; text-decoration: none;
+  border-radius: 8px; transition: all 0.2s; margin-bottom: 4px;
+}
+.nav-item:hover { background: rgba(255,255,255,0.05); color: #fff; }
+.nav-item.active { background: rgba(255,255,255,0.1); color: #fff; font-weight: 600; }
+.nav-item svg { width: 18px; height: 18px; }
+
+/* Main Content Area */
+.profile-content-split {
+  flex: 1;
+  display: flex; flex-direction: column;
+  background: #ffffff;
+  position: relative;
+}
+
+.profile-new-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 24px 32px; border-bottom: 1px solid #f0f0f0; background: #fff; z-index: 2;
 }
 
 .profile-title-area h2 { margin: 0 0 4px; font-size: 20px; color: #111827; font-weight: 700; }
 .profile-title-area p { margin: 0; font-size: 13px; color: #6b7280; }
 
 .profile-close-btn {
-  position: absolute; top: 24px; right: 24px;
   background: none; border: none; cursor: pointer; color: #9ca3af;
   padding: 8px; border-radius: 50%; transition: all 0.2s;
 }
@@ -43,10 +105,10 @@
   background: #f9fafb; display: flex; flex-direction: column;
 }
 
-#profileForm { display: flex; flex-direction: column; gap: 24px; }
+#profile-form { display: flex; flex-direction: column; gap: 24px; }
 
 .profile-section-card {
-  background: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px;
+  background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;
   padding: 24px; display: flex; flex-direction: column; gap: 20px;
 }
 
@@ -90,7 +152,9 @@
 .input-wrapper input:focus, .input-wrapper select:focus {
   outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
-.input-wrapper input:read-only { background: #f9fafb; color: #6b7280; cursor: not-allowed; }
+.input-wrapper input:read-only, .input-wrapper input:disabled, .input-wrapper select:disabled {
+  background: #f9fafb; color: #6b7280; cursor: not-allowed;
+}
 
 .profile-new-footer {
   display: flex; justify-content: flex-end; gap: 12px;
@@ -111,8 +175,12 @@
 .btn-save:hover { background: #312e81; }
 .btn-save svg { width: 16px; height: 16px; }
 
-@media (max-width: 640px) {
-  .section-card-grid { grid-template-columns: 1fr; }
-  .profile-new-modal { max-height: 100vh; border-radius: 0; }
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .profile-split-modal { flex-direction: column; height: 100vh; max-height: 100vh; border-radius: 0; }
+  .profile-sidebar-split { width: 100%; padding-bottom: 24px; flex-shrink: 0; display: none; /* Can hide sidebar on mobile or refactor */ }
   .profile-modal-overlay { padding: 0; }
+  .section-card-grid { grid-template-columns: 1fr; }
 }
+
+html { scroll-behavior: smooth; }
