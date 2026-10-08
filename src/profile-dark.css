@@ -1,0 +1,29 @@
+/* Dark Profile Theme Overrides */
+.profile-content { background: #111225 !important; color: white !important; }
+.profile-header h2 { color: white !important; }
+.profile-header p { color: rgba(255, 255, 255, 0.6) !important; }
+.profile-close-btn { color: rgba(255, 255, 255, 0.6) !important; }
+.profile-close-btn:hover { color: white !important; }
+.profile-tabs { border-bottom-color: rgba(255, 255, 255, 0.1) !important; }
+.profile-tabs button { color: rgba(255, 255, 255, 0.6) !important; }
+.profile-tabs button.active { color: #818cf8 !important; border-bottom-color: #818cf8 !important; }
+.profile-tabs button.active svg { color: #818cf8 !important; }
+.profile-tabs button:hover:not(.active) { color: white !important; background: rgba(255, 255, 255, 0.05) !important; }
+.section-title > svg { background: rgba(129, 140, 248, 0.15) !important; color: #818cf8 !important; }
+.section-title h3 { color: white !important; }
+.section-title p { color: rgba(255, 255, 255, 0.6) !important; }
+.profile-section label { color: rgba(255, 255, 255, 0.9) !important; }
+.input-with-icon input, .input-with-icon select { background: rgba(0, 0, 0, 0.2) !important; color: white !important; border-color: rgba(255, 255, 255, 0.1) !important; }
+.input-with-icon svg { color: rgba(255, 255, 255, 0.4) !important; }
+.skills-input-area { background: rgba(0, 0, 0, 0.2) !important; border-color: rgba(255, 255, 255, 0.2) !important; }
+.skills-input-area input { color: white !important; }
+.skills-input-area input::placeholder { color: rgba(255, 255, 255, 0.3) !important; }
+.skill-tag { background: rgba(129, 140, 248, 0.15) !important; color: #a5b4fc !important; }
+.link-card { background: rgba(0, 0, 0, 0.2) !important; border-color: rgba(255, 255, 255, 0.1) !important; }
+.link-card label { color: white !important; }
+.link-card input { background: rgba(255, 255, 255, 0.05) !important; color: white !important; border-color: rgba(255, 255, 255, 0.1) !important; }
+.link-card input::placeholder { color: rgba(255, 255, 255, 0.3) !important; }
+.link-card.github label svg { color: white !important; }
+.profile-footer { background: #111225 !important; border-top-color: rgba(255, 255, 255, 0.1) !important; }
+.profile-footer .ghost-button { color: rgba(255, 255, 255, 0.8) !important; }
+.profile-footer .ghost-button:hover { background: rgba(255, 255, 255, 0.1) !important; }
