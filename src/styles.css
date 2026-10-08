@@ -4087,3 +4087,6 @@ body.dark .copilot-icon {
   background: transparent;
   transition: left 0.08s ease, top 0.08s ease;
 }
+
+.upload-zone.is-dragging { background: var(--violet-soft); border-color: var(--violet) !important; }
+.upload-zone.is-loading { opacity: .6; pointer-events: none; }
