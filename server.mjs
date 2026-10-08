@@ -89,6 +89,19 @@ async function sendOTPEmail(toEmail, otp, name) {
   return { dev: false };
 }
 
+// Set ALLOWED_EMAIL_DOMAIN (e.g. "abccollege.edu.in" or "@abccollege.edu.in")
+// in your host's environment variables to allow sign-up only from those domains.
+// Comma-separate for more than one college, e.g. "imsec.ac.in,abc.edu.in".
+// Default: imsec.ac.in. (Later: move this list into a `colleges` table.)
+const DEFAULT_ALLOWED_EMAIL_DOMAIN = "imsec.ac.in";
+function isAllowedEmail(email) {
+  const raw = (process.env.ALLOWED_EMAIL_DOMAIN || DEFAULT_ALLOWED_EMAIL_DOMAIN).trim();
+  if (!raw) return true;
+  const domains = raw.split(",").map((d) => d.trim().toLowerCase().replace(/^@/, "")).filter(Boolean);
+  const host = String(email || "").trim().toLowerCase().split("@")[1] || "";
+  return domains.some((d) => host === d || host.endsWith("." + d));
+}
+
 const otpStore = new Map();
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
 
@@ -146,6 +159,11 @@ createServer(async (req, res) => {
 
         if (!role || !name || !email || !password) {
           json(res, 400, { error: "All fields are required (name, email, password, role)." });
+          return;
+        }
+
+        if (!isAllowedEmail(email)) {
+          json(res, 400, { error: "Please sign up with your college email address (e.g. name@imsec.ac.in)." });
           return;
         }
 
