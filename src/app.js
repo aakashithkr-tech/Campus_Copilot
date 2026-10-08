@@ -1698,158 +1698,227 @@ function renderModal() {
 
   if (modal.type === "profile") {
     const p = state.myProfile || {};
-    const u = state.me || {};
-    const initials = (u.name || "User").split(" ").map(w=>w[0]).join("").toUpperCase().slice(0, 2);
-    
-    // Convert comma separated skills into array
-    const skillsList = (p.skills || "").split(",").map(s => s.trim()).filter(s => s);
-    const skillsHtml = skillsList.map(s => `<span class="skill-tag">${escapeHTML(s)} ${icon("close")}</span>`).join("");
-    
-    // Calculate profile strength
-    let score = 0;
-    if (u.name) score += 20;
-    if (p.course && p.year) score += 20;
-    if (skillsList.length > 0) score += 20;
-    if (p.linkedin) score += 20;
-    if (p.portfolio) score += 20;
-    
+    const u = state.realUsers ? state.realUsers.find(ru => ru.loginId === session.loginId) : session;
+    const initials = (u?.name || "Student").split(" ").map(n=>n[0]).join("").substring(0,2).toUpperCase();
+
     return `
-    <div class="profile-modal-backdrop" data-action="close-modal">
-      <div class="profile-modal-container" role="dialog" aria-modal="true" data-modal-box>
-        <!-- Sidebar -->
-        <div class="profile-sidebar">
-          <div class="avatar-section">
-            <div class="avatar-circle">${initials} <button type="button" class="camera-btn">${icon("camera")}</button></div>
-            <h3>${escapeHTML(u.name || "My Profile")}</h3>
-            <p>${escapeHTML(u.email || "")}</p>
-            <span class="status-pill">● Active</span>
-          </div>
-          <div class="quick-details">
-            <div>${icon("book")} ${escapeHTML(p.course || "No Course Added")}</div>
-            <div>${icon("calendar")} ${escapeHTML(p.year ? p.year + " Year" : "Year Not Added")}</div>
-            <div>${icon("location")} ${escapeHTML(u.loginId || "")}</div>
-          </div>
-          <div class="profile-strength">
-            <div class="strength-header">
-              <h4>Profile Strength</h4>
-              <div class="strength-ring">${score}%</div>
-            </div>
-            <ul class="strength-checklist">
-              <li class="${u.name ? 'done' : 'missing'}">Basic details</li>
-              <li class="${p.course && p.year ? 'done' : 'missing'}">Academic info</li>
-              <li class="${skillsList.length > 0 ? 'done' : 'missing'}">Skills added</li>
-              <li class="${p.linkedin ? 'done' : 'missing'}">LinkedIn connected</li>
-              <li class="${p.portfolio ? 'done' : 'missing'}">Portfolio missing</li>
-            </ul>
-            <p class="strength-quote">"Keep learning, keep growing and build your future."</p>
-          </div>
-        </div>
-        
-        <!-- Content -->
-        <div class="profile-content">
-          <button class="profile-close-btn" data-action="close-modal">${icon("close")}</button>
-          
-          <div class="profile-header">
-            <h2>${icon("user")} Student Profile</h2>
-            <p>Manage your academic and professional details here.</p>
-          </div>
-          
-          <div class="profile-tabs">
-            <button type="button" class="active">${icon("file")} Basic Information</button>
-            <button type="button">${icon("sparkles")} Skills</button>
-            <button type="button">${icon("link")} Links</button>
-            <button type="button">${icon("settings")} Preferences</button>
-          </div>
-          
-          <form id="profile-form" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
-            <div class="profile-scroll-area">
-              
-              <!-- Academic Information -->
-              <div class="profile-section">
-                <div class="section-title">
-                  ${icon("briefcase")}
-                  <div>
-                    <h3>Academic Information</h3>
-                    <p>Your current academic details help us personalize your experience.</p>
-                  </div>
-                </div>
-                <div class="form-row">
-                  <label>Course / Major <span class="req">*</span>
-                    <div class="input-with-icon">
-                      ${icon("book")}
-                      <input type="text" name="course" value="${escapeHTML(p.course || "")}" placeholder="Computer Science (CS)">
-                    </div>
-                  </label>
-                  <label>Year of Study <span class="req">*</span>
-                    <div class="input-with-icon">
-                      ${icon("calendar")}
-                      <select name="year">
-                        <option value="1st" ${p.year==='1st'?'selected':''}>1st Year</option>
-                        <option value="2nd" ${p.year==='2nd'?'selected':''}>2nd Year</option>
-                        <option value="3rd" ${p.year==='3rd'?'selected':''}>3rd Year</option>
-                        <option value="4th" ${p.year==='4th'?'selected':''}>4th Year</option>
-                      </select>
-                    </div>
-                  </label>
-                </div>
-              </div>
-              
-              <!-- Key Skills -->
-              <div class="profile-section">
-                <div class="section-title">
-                  ${icon("sparkles")}
-                  <div>
-                    <h3>Key Skills</h3>
-                    <p>Add the technologies and tools you are comfortable with.</p>
-                  </div>
-                  <button type="button" class="ghost-button">+ Add Skill</button>
-                </div>
-                <div class="skills-input-area">
-                  <div class="skills-tags">${skillsHtml}</div>
-                  <input type="text" name="skills" value="${escapeHTML(p.skills || "")}" placeholder="e.g. React, Node.js, Python...">
-                </div>
-              </div>
-              
-              <!-- Professional Profiles -->
-              <div class="profile-section">
-                <div class="section-title">
-                  ${icon("link")}
-                  <div>
-                    <h3>Professional Profiles</h3>
-                    <p>Link your professional accounts to showcase your work.</p>
-                  </div>
-                </div>
-                <div class="form-row">
-                  <div class="link-card linkedin">
-                    <label>${icon("link")} LinkedIn URL</label>
-                    <input type="url" name="linkedin" value="${escapeHTML(p.linkedin || "")}" placeholder="https://linkedin.com/in/...">
-                  </div>
-                  <div class="link-card leetcode">
-                    <label>${icon("link")} LeetCode URL</label>
-                    <input type="url" name="leetcode" value="${escapeHTML(p.leetcode || "")}" placeholder="https://leetcode.com/u/...">
-                  </div>
-                  <div class="link-card github">
-                    <label>${icon("link")} GitHub URL</label>
-                    <input type="url" name="github" value="${escapeHTML(p.github || "")}" placeholder="https://github.com/...">
-                  </div>
-                  <div class="link-card portfolio">
-                    <label>${icon("link")} Portfolio URL</label>
-                    <input type="url" name="portfolio" value="${escapeHTML(p.portfolio || "")}" placeholder="https://...">
-                  </div>
-                </div>
-              </div>
-              
-            </div>
-            
-            <div class="profile-footer">
-              <button type="button" class="ghost-button" data-action="close-modal">Cancel</button>
-              <button type="submit" class="primary-button">${icon("check")} Save Profile</button>
-            </div>
-          </form>
-          
-        </div>
+<div class="profile-modal-overlay" data-action="close-modal">
+  <div class="profile-new-modal" onclick="event.stopPropagation()">
+    <div class="profile-new-header">
+      <div class="profile-avatar">${initials}</div>
+      <div class="profile-title-area">
+        <h2>Student Details</h2>
+        <p>Update your personal and academic information.</p>
       </div>
+      <button class="profile-close-btn" data-action="close-modal">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
     </div>
+    
+    <div class="profile-new-content">
+      <form id="profile-form" style="display:flex;flex-direction:column;gap:24px;">
+        
+        <!-- Personal Information -->
+        <div class="profile-section-card">
+          <div class="section-card-header">
+            <div class="section-icon blue-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>
+            <div class="section-card-title">
+              <h3>Personal Information</h3>
+              <p>Basic details about you.</p>
+            </div>
+          </div>
+          <div class="section-card-grid">
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg> Full Name <span class="req">*</span></label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                <input type="text" name="name" value="${escapeHTML(u?.name || '')}" readonly>
+              </div>
+            </div>
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg> Student ID / Roll No. <span class="req">*</span></label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
+                <input type="text" name="loginId" value="${escapeHTML(u?.loginId || '')}" readonly>
+              </div>
+            </div>
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg> Email Address <span class="req">*</span></label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                <input type="email" name="email" value="${escapeHTML(u?.email || '')}" readonly>
+              </div>
+            </div>
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg> Phone Number <span class="req">*</span></label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+                <input type="text" name="phone" value="${escapeHTML(p.phone || u?.phone || '')}">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Academic Details -->
+        <div class="profile-section-card">
+          <div class="section-card-header">
+            <div class="section-icon purple-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5z"></path><path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"></path></svg></div>
+            <div class="section-card-title">
+              <h3>Academic Details</h3>
+              <p>Your course and academic information.</p>
+            </div>
+          </div>
+          <div class="section-card-grid">
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg> Course / Branch <span class="req">*</span></label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                <select name="course" required>
+                  <option value="">Select Course</option>
+                  <option value="Computer Science (CS)" ${p.course === 'Computer Science (CS)' ? 'selected' : ''}>Computer Science (CS)</option>
+                  <option value="Information Technology (IT)" ${p.course === 'Information Technology (IT)' ? 'selected' : ''}>Information Technology (IT)</option>
+                  <option value="Electronics (ECE)" ${p.course === 'Electronics (ECE)' ? 'selected' : ''}>Electronics (ECE)</option>
+                  <option value="Mechanical (ME)" ${p.course === 'Mechanical (ME)' ? 'selected' : ''}>Mechanical (ME)</option>
+                  <option value="Civil (CE)" ${p.course === 'Civil (CE)' ? 'selected' : ''}>Civil (CE)</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg> Year of Study <span class="req">*</span></label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                <select name="year" required>
+                  <option value="">Select Year</option>
+                  <option value="1st Year" ${p.year === '1st Year' || p.year === '1st' ? 'selected' : ''}>1st Year</option>
+                  <option value="2nd Year" ${p.year === '2nd Year' || p.year === '2nd' ? 'selected' : ''}>2nd Year</option>
+                  <option value="3rd Year" ${p.year === '3rd Year' || p.year === '3rd' ? 'selected' : ''}>3rd Year</option>
+                  <option value="4th Year" ${p.year === '4th Year' || p.year === '4th' ? 'selected' : ''}>4th Year</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg> Semester <span class="req">*</span></label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                <select name="semester" required>
+                  <option value="">Select Semester</option>
+                  <option value="1st Semester" ${p.semester === '1st Semester' ? 'selected' : ''}>1st Semester</option>
+                  <option value="2nd Semester" ${p.semester === '2nd Semester' ? 'selected' : ''}>2nd Semester</option>
+                  <option value="3rd Semester" ${p.semester === '3rd Semester' ? 'selected' : ''}>3rd Semester</option>
+                  <option value="4th Semester" ${p.semester === '4th Semester' ? 'selected' : ''}>4th Semester</option>
+                  <option value="5th Semester" ${p.semester === '5th Semester' ? 'selected' : ''}>5th Semester</option>
+                  <option value="6th Semester" ${p.semester === '6th Semester' ? 'selected' : ''}>6th Semester</option>
+                  <option value="7th Semester" ${p.semester === '7th Semester' ? 'selected' : ''}>7th Semester</option>
+                  <option value="8th Semester" ${p.semester === '8th Semester' ? 'selected' : ''}>8th Semester</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg> Section</label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                <select name="section">
+                  <option value="">Select Section</option>
+                  <option value="A" ${p.section === 'A' ? 'selected' : ''}>A</option>
+                  <option value="B" ${p.section === 'B' ? 'selected' : ''}>B</option>
+                  <option value="C" ${p.section === 'C' ? 'selected' : ''}>C</option>
+                  <option value="D" ${p.section === 'D' ? 'selected' : ''}>D</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Additional Information -->
+        <div class="profile-section-card">
+          <div class="section-card-header">
+            <div class="section-icon indigo-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+            <div class="section-card-title">
+              <h3>Additional Information</h3>
+              <p>Help us know you better.</p>
+            </div>
+          </div>
+          <div class="section-card-grid">
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg> Date of Birth</label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                <input type="date" name="dob" value="${escapeHTML(p.dob || '')}">
+              </div>
+            </div>
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg> Gender</label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                <select name="gender">
+                  <option value="">Select Gender</option>
+                  <option value="Male" ${p.gender === 'Male' ? 'selected' : ''}>Male</option>
+                  <option value="Female" ${p.gender === 'Female' ? 'selected' : ''}>Female</option>
+                  <option value="Other" ${p.gender === 'Other' ? 'selected' : ''}>Other</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg> City</label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                <input type="text" name="city" value="${escapeHTML(p.city || '')}" placeholder="e.g. Ghaziabad">
+              </div>
+            </div>
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg> Admission Year</label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                <select name="admission_year">
+                  <option value="">Select Year</option>
+                  <option value="2021" ${p.admission_year === '2021' ? 'selected' : ''}>2021</option>
+                  <option value="2022" ${p.admission_year === '2022' ? 'selected' : ''}>2022</option>
+                  <option value="2023" ${p.admission_year === '2023' ? 'selected' : ''}>2023</option>
+                  <option value="2024" ${p.admission_year === '2024' ? 'selected' : ''}>2024</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Emergency Contact -->
+        <div class="profile-section-card">
+          <div class="section-card-header">
+            <div class="section-icon purple-blue-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg></div>
+            <div class="section-card-title">
+              <h3>Emergency Contact <span style="font-weight:400; color:var(--text-light);">(Optional)</span></h3>
+              <p>In case of emergency.</p>
+            </div>
+          </div>
+          <div class="section-card-grid">
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg> Parent/Guardian Name</label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                <input type="text" name="guardian_name" value="${escapeHTML(p.guardian_name || '')}">
+              </div>
+            </div>
+            <div class="form-group">
+              <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg> Emergency Contact Number</label>
+              <div class="input-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+                <input type="text" name="emergency_number" value="${escapeHTML(p.emergency_number || '')}">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="profile-new-footer">
+          <button type="button" class="btn-cancel" data-action="close-modal">Cancel</button>
+          <button type="submit" class="btn-save">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            Save Details
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
     `;
   }
 
