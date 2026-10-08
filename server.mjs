@@ -53,8 +53,9 @@ async function sendOTPEmail(toEmail, otp, name) {
 
   if (!process.env.BREVO_API_KEY) return { dev: true };
 
-  await fetch("https://api.brevo.com/v3/smtp/email", {
+  const brevoRes = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
+    signal: AbortSignal.timeout(15000),
     headers: {
       "Content-Type": "application/json",
       "api-key": process.env.BREVO_API_KEY,
@@ -77,6 +78,13 @@ async function sendOTPEmail(toEmail, otp, name) {
       `,
     }),
   });
+
+  if (!brevoRes.ok) {
+    const detail = await brevoRes.text().catch(() => "");
+    console.error(`❌ BREVO ERROR ${brevoRes.status}: ${detail}`);
+    throw new Error(`Brevo ${brevoRes.status}: ${detail}`);
+  }
+  console.log("✅ Brevo accepted the OTP email");
 
   return { dev: false };
 }
@@ -169,7 +177,14 @@ createServer(async (req, res) => {
           registrationData: { role, name, email, phone, admission_number, password },
         });
 
-        const emailResult = await sendOTPEmail(email, otp, name);
+        let emailResult;
+        try {
+          emailResult = await sendOTPEmail(email, otp, name);
+        } catch (err) {
+          otpStore.delete(email.toLowerCase().trim());
+          json(res, 502, { error: "Could not send OTP email right now. Please try again in a bit." });
+          return;
+        }
 
         json(res, 200, {
           message: emailResult.dev
@@ -238,7 +253,14 @@ createServer(async (req, res) => {
         }
         const otp = generateOTP();
         otpStore.set(`reset:${email.toLowerCase().trim()}`, { otp, expiresAt: Date.now() + OTP_EXPIRY_MS });
-        const emailResult = await sendOTPEmail(email, otp, user.name);
+        let emailResult;
+        try {
+          emailResult = await sendOTPEmail(email, otp, user.name);
+        } catch (err) {
+          otpStore.delete(`reset:${email.toLowerCase().trim()}`);
+          json(res, 502, { error: "Could not send OTP email right now. Please try again in a bit." });
+          return;
+        }
         json(res, 200, {
           message: emailResult.dev
             ? "OTP generated (dev mode). Check your server terminal."
