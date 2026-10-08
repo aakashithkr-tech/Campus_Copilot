@@ -25,17 +25,19 @@ await exec(`
     emergency_number TEXT DEFAULT '',
     phone TEXT DEFAULT ''
   );
+`);
 
-  
-  try { await exec("ALTER TABLE student_profiles ADD COLUMN semester TEXT DEFAULT ''"); } catch(e){}
-  try { await exec("ALTER TABLE student_profiles ADD COLUMN section TEXT DEFAULT ''"); } catch(e){}
-  try { await exec("ALTER TABLE student_profiles ADD COLUMN dob TEXT DEFAULT ''"); } catch(e){}
-  try { await exec("ALTER TABLE student_profiles ADD COLUMN gender TEXT DEFAULT ''"); } catch(e){}
-  try { await exec("ALTER TABLE student_profiles ADD COLUMN city TEXT DEFAULT ''"); } catch(e){}
-  try { await exec("ALTER TABLE student_profiles ADD COLUMN admission_year TEXT DEFAULT ''"); } catch(e){}
-  try { await exec("ALTER TABLE student_profiles ADD COLUMN guardian_name TEXT DEFAULT ''"); } catch(e){}
-  try { await exec("ALTER TABLE student_profiles ADD COLUMN emergency_number TEXT DEFAULT ''"); } catch(e){}
+try { await exec("ALTER TABLE student_profiles ADD COLUMN semester TEXT DEFAULT ''"); } catch(e){}
+try { await exec("ALTER TABLE student_profiles ADD COLUMN section TEXT DEFAULT ''"); } catch(e){}
+try { await exec("ALTER TABLE student_profiles ADD COLUMN dob TEXT DEFAULT ''"); } catch(e){}
+try { await exec("ALTER TABLE student_profiles ADD COLUMN gender TEXT DEFAULT ''"); } catch(e){}
+try { await exec("ALTER TABLE student_profiles ADD COLUMN city TEXT DEFAULT ''"); } catch(e){}
+try { await exec("ALTER TABLE student_profiles ADD COLUMN admission_year TEXT DEFAULT ''"); } catch(e){}
+try { await exec("ALTER TABLE student_profiles ADD COLUMN guardian_name TEXT DEFAULT ''"); } catch(e){}
+try { await exec("ALTER TABLE student_profiles ADD COLUMN emergency_number TEXT DEFAULT ''"); } catch(e){}
+try { await exec("ALTER TABLE student_profiles ADD COLUMN phone TEXT DEFAULT ''"); } catch(e){}
 
+await exec(`
   CREATE TABLE IF NOT EXISTS auth_users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     login_id TEXT UNIQUE,
