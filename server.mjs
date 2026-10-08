@@ -1,4 +1,4 @@
-import { createReadStream, existsSync } from "node:fs";
+import { createReadStream, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
@@ -648,11 +648,81 @@ createServer(async (req, res) => {
         return;
       }
 
+      if (pathname === "/api/extract-notice" && req.method === "POST") {
+        const session = await getSession(bearerToken(req));
+        if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
+        const { data, mimeType } = await readBody(req);
+        if (!data) { json(res, 400, { error: "No PDF data received." }); return; }
+
+        const keys = [
+          process.env.GEMINI_API_KEY,
+          process.env.GEMINI_API_KEY2,
+          process.env.GEMINI_API_KEY3,
+        ].filter(Boolean);
+        if (!keys.length) { json(res, 500, { error: "No GEMINI_API_KEY set on server." }); return; }
+
+        const prompt = `You are reading a college circular/notice PDF. Extract these fields and reply with ONLY a JSON object (no markdown):
+{
+  "title": "short title, max 80 chars",
+  "type": one of "Announcement" | "Assignment" | "Academic" | "Event" | "General",
+  "summary": "2-3 simple sentences telling students what they need to know",
+  "department": "issuing department, or empty string",
+  "audience": one of "All Students" | "CSE Students" | "Faculty" | "Everyone",
+  "deadline": "YYYY-MM-DD of the main deadline/event date, or empty string",
+  "priority": one of "High" | "Medium" | "Low",
+  "action": "one short sentence: what students must do"
+}`;
+        const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite"];
+        let lastErr = "All Gemini keys/models failed.";
+        let result = null;
+
+        outer: for (const key of keys) {
+          for (const model of models) {
+            try {
+              const aiRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    contents: [{ role: "user", parts: [
+                      { inline_data: { mime_type: mimeType || "application/pdf", data } },
+                      { text: prompt },
+                    ] }],
+                    generationConfig: { responseMimeType: "application/json", maxOutputTokens: 1500 },
+                  }),
+                }
+              );
+              const aiData = await aiRes.json();
+              if (!aiRes.ok) { lastErr = aiData.error?.message || "Gemini API error."; continue; }
+              const raw = (aiData.candidates?.[0]?.content?.parts?.[0]?.text || "").replace(/```json|```/g, "").trim();
+              result = JSON.parse(raw);
+              break outer;
+            } catch (err) {
+              lastErr = err.message;
+            }
+          }
+        }
+
+        if (!result) { json(res, 502, { error: lastErr }); return; }
+        json(res, 200, { fields: result }); return;
+      }
+
       if (pathname === "/api/notices") {
         const session = await getSession(bearerToken(req));
         if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
         if (req.method === "POST") {
           const body = await readBody(req);
+          if (body.pdfData) {
+            const fileName = body.pdfName ? `${Date.now()}_${body.pdfName.replace(/[^a-zA-Z0-9.-]/g, '_')}` : `notice_${Date.now()}.pdf`;
+            const uploadDir = join(root, 'data', 'uploads');
+            if (!existsSync(uploadDir)) {
+              mkdirSync(uploadDir, { recursive: true });
+            }
+            writeFileSync(join(uploadDir, fileName), Buffer.from(body.pdfData, 'base64'));
+            body.pdfUrl = `/data/uploads/${fileName}`;
+            delete body.pdfData;
+          }
           noticesStore.push(body);
           json(res, 201, { notice: body }); return;
         }

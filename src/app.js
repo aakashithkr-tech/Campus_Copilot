@@ -1545,6 +1545,7 @@ function noticeCard(notice, facultyOwn = false) {
       <div class="notice-action"><span>Required action</span><strong>${notice.action}</strong></div>
       <div class="notice-card-footer">
         <button class="text-button" data-notice="${notice.id}">View source ${icon("arrow")}</button>
+        ${notice.pdfUrl ? `<a href="${notice.pdfUrl}" target="_blank" download class="ghost-button" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px;border:1px solid var(--border)">Download PDF</a>` : ""}
         ${facultyOwn ? `<span class="engagement">${icon("chart")} ${notice.views} reads</span>` : `<button class="save-button" data-save="${notice.id}">${icon("calendar")} Save reminder</button>`}
       </div>
     </article>`;
@@ -2190,6 +2191,7 @@ function bindEvents() {
   });
 
   document.querySelector("#publish-form")?.addEventListener("submit", handlePublish);
+  setupNoticeUpload();
   ["title", "summary", "action", "deadline"].forEach((field) => {
     document.querySelector(`#publish-${field}`)?.addEventListener("input", updatePreview);
   });
@@ -2571,14 +2573,101 @@ async function handlePublish(event) {
     saved: 0,
     createdBy: session.name,
   };
+
+  if (window.currentNoticePdfData) {
+    notice.pdfData = window.currentNoticePdfData;
+    notice.pdfName = window.currentNoticePdfName;
+  }
+
   const saved = await mutate(
     "/api/notices",
     { method: "POST", body: notice },
     "Verified notice published successfully.",
   );
   if (!saved) return;
+  window.currentNoticePdfData = null;
+  window.currentNoticePdfName = null;
   currentPage = "notices";
   render();
+}
+
+function setupNoticeUpload() {
+  const input = document.querySelector("#notice-file");
+  const zone = document.querySelector(".upload-zone");
+  if (!input || !zone) return;
+
+  const label = zone.querySelector("strong");
+  const hint = zone.querySelector("small");
+
+  const setStatus = (title, sub) => {
+    if (label) label.textContent = title;
+    if (hint) hint.textContent = sub;
+  };
+
+  const fileToBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = () => reject(new Error("Could not read the file."));
+    reader.readAsDataURL(file);
+  });
+
+  const setValue = (selector, value) => {
+    const el = document.querySelector(selector);
+    if (!el || value === undefined || value === null || value === "") return;
+    if (el.tagName === "SELECT") {
+      const match = [...el.options].find((o) => o.value.toLowerCase() === String(value).toLowerCase());
+      if (match) el.value = match.value;
+    } else {
+      el.value = value;
+    }
+  };
+
+  async function handleFile(file) {
+    if (!file) return;
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) { showToast("Please choose a PDF file.", "error"); return; }
+    if (file.size > 10 * 1024 * 1024) { showToast("PDF is too large. Max 10 MB.", "error"); return; }
+
+    zone.classList.add("is-loading");
+    setStatus(file.name, "Reading the notice...");
+    try {
+      const data = await fileToBase64(file);
+      window.currentNoticePdfData = data;
+      window.currentNoticePdfName = file.name;
+      const { fields } = await api("/api/extract-notice", {
+        method: "POST",
+        body: { data, mimeType: "application/pdf" },
+      });
+      setValue("#publish-title", fields.title);
+      setValue("#publish-type", fields.type);
+      setValue("#publish-summary", fields.summary);
+      setValue("#publish-department", fields.department);
+      setValue("#publish-audience", fields.audience);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(fields.deadline || "")) setValue("#publish-deadline", fields.deadline);
+      setValue("#publish-priority", fields.priority);
+      setValue("#publish-action", fields.action);
+      updatePreview();
+      setStatus(file.name, "Fields extracted. Review them below, then publish.");
+      showToast("Notice read. Please review the fields.");
+    } catch (error) {
+      setStatus(file.name, "Could not auto-read. Please fill the fields manually.");
+      showToast(error.message || "Could not read the PDF.", "error");
+    } finally {
+      zone.classList.remove("is-loading");
+    }
+  }
+
+  input.addEventListener("change", () => handleFile(input.files?.[0]));
+
+  ["dragenter", "dragover"].forEach((evt) => zone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    zone.classList.add("is-dragging");
+  }));
+  ["dragleave", "drop"].forEach((evt) => zone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    zone.classList.remove("is-dragging");
+  }));
+  zone.addEventListener("drop", (e) => handleFile(e.dataTransfer?.files?.[0]));
 }
 
 function updatePreview() {

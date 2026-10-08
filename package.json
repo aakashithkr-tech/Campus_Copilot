@@ -5,7 +5,7 @@
   "description": "Role-based CampusCopilot hackathon MVP",
   "type": "module",
   "scripts": {
-    "start": "node server.mjs",
+    "start": "node --env-file=.env server.mjs",
     "check": "node --check src/app.js && node --check src/data.js && node --check database.mjs && node --check server.mjs"
   },
   "dependencies": {
