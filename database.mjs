@@ -15,12 +15,26 @@ await exec(`
     login_id TEXT PRIMARY KEY,
     course TEXT DEFAULT '',
     year TEXT DEFAULT '',
-    skills TEXT DEFAULT '',
-    linkedin TEXT DEFAULT '',
-    leetcode TEXT DEFAULT '',
-    github TEXT DEFAULT '',
-    portfolio TEXT DEFAULT ''
+    semester TEXT DEFAULT '',
+    section TEXT DEFAULT '',
+    dob TEXT DEFAULT '',
+    gender TEXT DEFAULT '',
+    city TEXT DEFAULT '',
+    admission_year TEXT DEFAULT '',
+    guardian_name TEXT DEFAULT '',
+    emergency_number TEXT DEFAULT '',
+    phone TEXT DEFAULT ''
   );
+
+  
+  try { await exec("ALTER TABLE student_profiles ADD COLUMN semester TEXT DEFAULT ''"); } catch(e){}
+  try { await exec("ALTER TABLE student_profiles ADD COLUMN section TEXT DEFAULT ''"); } catch(e){}
+  try { await exec("ALTER TABLE student_profiles ADD COLUMN dob TEXT DEFAULT ''"); } catch(e){}
+  try { await exec("ALTER TABLE student_profiles ADD COLUMN gender TEXT DEFAULT ''"); } catch(e){}
+  try { await exec("ALTER TABLE student_profiles ADD COLUMN city TEXT DEFAULT ''"); } catch(e){}
+  try { await exec("ALTER TABLE student_profiles ADD COLUMN admission_year TEXT DEFAULT ''"); } catch(e){}
+  try { await exec("ALTER TABLE student_profiles ADD COLUMN guardian_name TEXT DEFAULT ''"); } catch(e){}
+  try { await exec("ALTER TABLE student_profiles ADD COLUMN emergency_number TEXT DEFAULT ''"); } catch(e){}
 
   CREATE TABLE IF NOT EXISTS auth_users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -322,7 +336,7 @@ export async function createRegistration({ role, name, email, phone = "", admiss
 
   try {
     await db.execute({
-      sql: `INSERT INTO auth_users (login_id, role, name, email, phone, admission_number, password_hash, status, approved_at, approved_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${isKnownUser ? "CURRENT_TIMESTAMP" : "NULL"}, ${isKnownUser ? "'System auto-approve'" : "NULL"})`,
+      sql: `INSERT INTO auth_users (login_id, role, name, email, phone, admission_number, password_hash, status, approved_at, approved_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${isKnownUser ? "CURRENT_TIMESTAMP" : "NULL"}, ${isKnownUser ? "'System auto-approve'" : "NULL"})`,
       args: [loginId, role, name.trim(), email.trim().toLowerCase(), phone.trim(), cleanAdmission, hashPassword(password), status]
     });
   } catch (err) {
@@ -549,21 +563,25 @@ export async function addTeacherByAdmin({ name, email, password }) {
 
 export async function getProfile(loginId) {
   const result = await db.execute({ sql: `SELECT * FROM student_profiles WHERE login_id = ?`, args: [loginId] });
-  return result.rows[0] || { course: "", year: "", skills: "", linkedin: "", leetcode: "", github: "", portfolio: "" };
+  return result.rows[0] || { course: "", year: "", semester: "", section: "", dob: "", gender: "", city: "", admission_year: "", guardian_name: "", emergency_number: "", phone: "" };
 }
 
 export async function upsertProfile(loginId, profile) {
   await db.execute({
-    sql: `INSERT INTO student_profiles (login_id, course, year, skills, linkedin, leetcode, github, portfolio)
+    sql: `INSERT INTO student_profiles (login_id, course, year, semester, section, dob, gender, city, admission_year, guardian_name, emergency_number, phone)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(login_id) DO UPDATE SET
             course = excluded.course,
             year = excluded.year,
-            skills = excluded.skills,
-            linkedin = excluded.linkedin,
-            leetcode = excluded.leetcode,
-            github = excluded.github,
-            portfolio = excluded.portfolio`,
-    args: [loginId, profile.course || "", profile.year || "", profile.skills || "", profile.linkedin || "", profile.leetcode || "", profile.github || "", profile.portfolio || ""]
+            semester = excluded.semester,
+            section = excluded.section,
+            dob = excluded.dob,
+            gender = excluded.gender,
+            city = excluded.city,
+            admission_year = excluded.admission_year,
+            guardian_name = excluded.guardian_name,
+            emergency_number = excluded.emergency_number,
+            phone = excluded.phone`,
+    args: [loginId, profile.course || "", profile.year || "", profile.semester || "", profile.section || "", profile.dob || "", profile.gender || "", profile.city || "", profile.admission_year || "", profile.guardian_name || "", profile.emergency_number || "", profile.phone || ""]
   });
 }
