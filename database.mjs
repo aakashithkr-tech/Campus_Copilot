@@ -161,6 +161,17 @@ await exec(`
   CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry ON auth_sessions(expires_at);
 `);
 
+// Assignment attachments (PDF / docs / images). Stored in the database (not on disk)
+// so they survive Render redeploys.
+await exec(`
+  CREATE TABLE IF NOT EXISTS assignment_files (
+    assignment_id INTEGER PRIMARY KEY REFERENCES assignments(id) ON DELETE CASCADE,
+    mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+    data TEXT NOT NULL
+  );
+`);
+try { await exec("ALTER TABLE assignments ADD COLUMN file_name TEXT DEFAULT ''"); } catch(e){}
+
 const hashPassword = (password, salt = randomBytes(16).toString("hex")) => {
   const hash = scryptSync(password, salt, 64).toString("hex");
   return `${salt}:${hash}`;
@@ -435,7 +446,7 @@ export async function getDashboardState(session) {
       args: [session.id]
     }));
     const myAssignments = all(await db.execute({
-      sql: `SELECT a.id, a.title, a.description, a.max_marks AS maxMarks, a.due_date AS dueDate, s.name AS subjectName, COALESCE(sub.status, 'Pending') AS submissionStatus, sub.marks_obtained AS marksObtained FROM assignments a JOIN subjects s ON s.id = a.subject_id LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id AND sub.student_user_id = ? ORDER BY a.due_date ASC`,
+      sql: `SELECT a.id, a.title, a.description, a.max_marks AS maxMarks, a.due_date AS dueDate, a.file_name AS fileName, s.name AS subjectName, COALESCE(sub.status, 'Pending') AS submissionStatus, sub.marks_obtained AS marksObtained FROM assignments a JOIN subjects s ON s.id = a.subject_id LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id AND sub.student_user_id = ? ORDER BY a.due_date ASC`,
       args: [session.id]
     }));
     return { me: session, attendance: attendance.filter(i => i.studentUserId === session.id), classAttendance, testMarks, myAssignments, notifications, loginHistory };
@@ -456,7 +467,7 @@ export async function getDashboardState(session) {
     })) : [];
 
     const assignments = subjectIds.length ? all(await db.execute({
-      sql: `SELECT a.id, a.title, a.description, a.max_marks AS maxMarks, a.due_date AS dueDate, s.name AS subjectName, s.code AS subjectCode, COUNT(sub.id) AS totalSubmissions, SUM(CASE WHEN sub.status = 'Submitted' THEN 1 ELSE 0 END) AS submitted FROM assignments a JOIN subjects s ON s.id = a.subject_id LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id WHERE a.subject_id IN (${subjectIds.join(",")}) GROUP BY a.id ORDER BY a.due_date ASC`,
+      sql: `SELECT a.id, a.title, a.description, a.max_marks AS maxMarks, a.due_date AS dueDate, a.file_name AS fileName, s.name AS subjectName, s.code AS subjectCode, COUNT(sub.id) AS totalSubmissions, SUM(CASE WHEN sub.status = 'Submitted' THEN 1 ELSE 0 END) AS submitted FROM assignments a JOIN subjects s ON s.id = a.subject_id LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id WHERE a.subject_id IN (${subjectIds.join(",")}) GROUP BY a.id ORDER BY a.due_date ASC`,
       args: []
     })) : [];
 
@@ -503,9 +514,21 @@ export async function addOrUpdateMark({ studentUserId, subjectId, testName, mark
   return true;
 }
 
-export async function createAssignment({ subjectId, title, description, maxMarks, dueDate, createdBy }) {
-  await db.execute({ sql: `INSERT INTO assignments (subject_id, title, description, max_marks, due_date, created_by) VALUES (?, ?, ?, ?, ?, ?)`, args: [subjectId, title, description || "", maxMarks, dueDate, createdBy] });
+export async function createAssignment({ subjectId, title, description, maxMarks, dueDate, createdBy, fileName, fileData, mimeType }) {
+  const result = await db.execute({ sql: `INSERT INTO assignments (subject_id, title, description, max_marks, due_date, created_by, file_name) VALUES (?, ?, ?, ?, ?, ?, ?)`, args: [subjectId, title, description || "", maxMarks, dueDate, createdBy, fileData ? (fileName || "attachment") : ""] });
+  if (fileData) {
+    const id = Number(result.lastInsertRowid);
+    await db.execute({ sql: `INSERT INTO assignment_files (assignment_id, mime_type, data) VALUES (?, ?, ?)`, args: [id, mimeType || "application/octet-stream", fileData] });
+  }
   return true;
+}
+
+export async function getAssignmentFile(assignmentId) {
+  const row = first(await db.execute({
+    sql: `SELECT a.file_name AS fileName, f.mime_type AS mimeType, f.data FROM assignments a JOIN assignment_files f ON f.assignment_id = a.id WHERE a.id = ?`,
+    args: [assignmentId]
+  }));
+  return row || null;
 }
 
 export async function updateSubmissionStatus({ assignmentId, studentUserId, status, marksObtained }) {

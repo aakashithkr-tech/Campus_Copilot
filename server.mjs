@@ -23,6 +23,7 @@ import {
   upsertClassAttendance,
   addOrUpdateMark,
   createAssignment,
+  getAssignmentFile,
   updateSubmissionStatus,
   getAssignmentStudents,
   getAllSubjects,
@@ -508,6 +509,9 @@ createServer(async (req, res) => {
         if (!body.subjectId || !body.title || !body.dueDate) {
           json(res, 400, { error: "subjectId, title, dueDate are required." }); return;
         }
+        if (body.fileData && String(body.fileData).length > 7 * 1024 * 1024) {
+          json(res, 413, { error: "Attachment is too large. Max 5 MB." }); return;
+        }
         await createAssignment({ ...body, createdBy: session.id });
         json(res, 201, { message: "Assignment created." });
         return;
@@ -520,6 +524,21 @@ createServer(async (req, res) => {
         const body = await readBody(req);
         await updateSubmissionStatus({ assignmentId, ...body });
         json(res, 200, { message: "Submission updated." });
+        return;
+      }
+
+      if (req.method === "GET" && pathname.match(/^\/api\/assignments\/\d+\/file$/)) {
+        const session = await getSession(bearerToken(req));
+        if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
+        const file = await getAssignmentFile(Number(pathname.split("/")[3]));
+        if (!file) { json(res, 404, { error: "No attachment for this assignment." }); return; }
+        const buf = Buffer.from(file.data, "base64");
+        res.writeHead(200, {
+          "Content-Type": file.mimeType,
+          "Content-Length": buf.length,
+          "Content-Disposition": `inline; filename="${encodeURIComponent(file.fileName || "attachment")}"`,
+        });
+        res.end(buf);
         return;
       }
 

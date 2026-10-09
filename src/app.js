@@ -445,6 +445,9 @@ function appShell() {
             <button class="nav-item ${currentPage === "my-marks" ? "active" : ""}" data-nav="my-marks">
               ${icon("chart")}<span>My Marks</span>
             </button>
+            <button class="nav-item ${currentPage === "my-assignments" ? "active" : ""}" data-nav="my-assignments">
+              ${icon("notice")}<span>My Assignments</span>
+            </button>
           ` : ""}
         </nav>
         <div class="sidebar-card" style="flex-shrink:0">
@@ -495,6 +498,7 @@ function studentPage() {
   if (currentPage === "support") return supportPage();
   if (currentPage === "my-attendance") return studentAttendancePage();
   if (currentPage === "my-marks") return studentMarksPage();
+  if (currentPage === "my-assignments") return studentAssignmentsPage();
   return studentOverview();
 }
 
@@ -527,6 +531,26 @@ function studentAttendancePage() {
           </div>
         </section>`;
     }).join("") : emptyState("No attendance records yet.", "Your teacher hasn't marked attendance yet.")}
+  `;
+}
+
+function studentAssignmentsPage() {
+  const list = state.myAssignments || [];
+  return `
+    <div class="welcome-row">
+      <div><span class="eyebrow">My Assignments</span><h2>Your assignments and attached files.</h2></div>
+    </div>
+    <section class="panel">
+      ${list.length ? list.map(a => `
+        <div style="border:1px solid var(--line,#e7e8ef);border-radius:12px;padding:1rem;margin-bottom:0.75rem">
+          <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+            <div><strong>${escapeHTML(a.title)}</strong> <span class="status-pill" style="margin-left:0.5rem">${escapeHTML(a.subjectName)}</span></div>
+            <div style="font-size:12px;color:var(--muted)">Due: <strong>${escapeHTML(a.dueDate)}</strong> · Max: <strong>${a.maxMarks}</strong> · Status: <strong>${escapeHTML(a.submissionStatus)}</strong>${a.marksObtained != null ? ` · Marks: <strong>${a.marksObtained}</strong>` : ""}</div>
+          </div>
+          ${a.description ? `<p style="margin:0.5rem 0 0">${escapeHTML(a.description)}</p>` : ""}
+          ${a.fileName ? `<button class="ghost-button" type="button" data-download-assignment="${a.id}" data-file-name="${escapeHTML(a.fileName)}" style="margin-top:0.5rem">${icon("upload")} ${escapeHTML(a.fileName)}</button>` : ""}
+        </div>`).join("") : emptyState("No assignments yet.", "Your teachers haven't posted any assignments.")}
+    </section>
   `;
 }
 
@@ -1168,6 +1192,9 @@ function teacherAssignmentsPage() {
         </label>
         <label style="grid-column:1/-1">Title<input id="asgn-title" placeholder="Assignment title" required /></label>
         <label style="grid-column:1/-1">Description<textarea id="asgn-desc" rows="2" placeholder="What should students do?"></textarea></label>
+        <label style="grid-column:1/-1">Attach file <small style="color:var(--muted)">(optional · PDF, Word, PPT, Excel, image, ZIP · max 5 MB)</small>
+          <input id="asgn-file" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.zip" />
+        </label>
         <label>Max Marks<input id="asgn-marks" type="number" value="10" min="1" required /></label>
         <label>Due Date<input id="asgn-due" type="date" value="${new Date(Date.now() + 7*24*60*60*1000).toISOString().split("T")[0]}" required /></label>
         <div style="grid-column:1/-1;display:flex;gap:0.75rem">
@@ -1185,6 +1212,7 @@ function teacherAssignmentsPage() {
             <div>
               <strong>${escapeHTML(a.title)}</strong>
               <span class="status-pill" style="margin-left:0.5rem;background:var(--blue-soft);color:var(--blue)">${escapeHTML(a.subjectCode)}</span>
+              ${a.fileName ? `<button class="ghost-button" type="button" data-download-assignment="${a.id}" data-file-name="${escapeHTML(a.fileName)}" style="margin-left:0.5rem;padding:2px 8px">${icon("upload")} ${escapeHTML(a.fileName)}</button>` : ""}
             </div>
             <div style="display:flex;gap:0.5rem;align-items:center">
               <span style="font-size:12px;color:var(--muted)">Due: <strong>${a.dueDate}</strong></span>
@@ -2403,6 +2431,29 @@ function bindEvents() {
     }
   });
 
+  // Open an assignment attachment (needs the auth token, so fetch -> blob)
+  document.querySelectorAll("[data-download-assignment]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/assignments/${button.dataset.downloadAssignment}/file`, {
+          headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {},
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Could not open the file.");
+        const url = URL.createObjectURL(await res.blob());
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = button.dataset.fileName || "attachment";
+        a.target = "_blank";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (error) {
+        showToast(error.message, "error");
+      }
+    });
+  });
+
   document.querySelectorAll("[data-nav]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.preventDefault();
@@ -2694,7 +2745,22 @@ function bindEvents() {
     const maxMarks = Number(document.querySelector("#asgn-marks")?.value);
     const dueDate = document.querySelector("#asgn-due")?.value;
     if (!subjectId || !title || !dueDate) { showToast("Fill all required fields.", "error"); return; }
-    await mutate("/api/assignments", { method: "POST", body: { subjectId, title, description, maxMarks, dueDate } }, "Assignment created.");
+    const body = { subjectId, title, description, maxMarks, dueDate };
+    const file = document.querySelector("#asgn-file")?.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { showToast("File is too large. Max 5 MB.", "error"); return; }
+      try {
+        body.fileData = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(",")[1]);
+          reader.onerror = () => reject(new Error("Could not read the file."));
+          reader.readAsDataURL(file);
+        });
+      } catch (err) { showToast(err.message, "error"); return; }
+      body.fileName = file.name;
+      body.mimeType = file.type || "application/octet-stream";
+    }
+    await mutate("/api/assignments", { method: "POST", body }, "Assignment created.");
   });
   document.querySelectorAll("[data-manage-assignment]").forEach(btn => {
     btn.addEventListener("click", async () => {
