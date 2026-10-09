@@ -2392,6 +2392,7 @@ function bindEvents() {
       saveSession({ token: result.token, role: result.user.role, userId: result.user.id, name: result.user.name });
       // Reset chat with the real logged-in user's name
       chat = initChat();
+      modal = null;
       await refreshState();
       currentPage = "overview";
       render();
@@ -2759,6 +2760,7 @@ async function handleAction(action, event, button = event?.target?.closest('[dat
       // A local sign-out should still succeed if the server session already expired.
     }
     saveSession(null);
+    modal = null;
     currentPage = "overview";
     render();
     showToast("You have been signed out.");
