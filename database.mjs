@@ -153,6 +153,30 @@ await exec(`
     updated_at INTEGER NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS student_dashboard_preferences (
+    user_id INTEGER PRIMARY KEY REFERENCES auth_users(id) ON DELETE CASCADE,
+    last_selected_mode TEXT CHECK (last_selected_mode IN ('campus', 'professional'))
+  );
+
+  CREATE TABLE IF NOT EXISTS professional_profiles (
+    student_user_id INTEGER PRIMARY KEY REFERENCES auth_users(id) ON DELETE CASCADE,
+    profile_json TEXT NOT NULL DEFAULT '{}',
+    visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private', 'public')),
+    share_fields_json TEXT NOT NULL DEFAULT '[]',
+    share_token TEXT NOT NULL UNIQUE,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS professional_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_user_id INTEGER NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('skill', 'project', 'certification', 'experience', 'achievement', 'application', 'interview')),
+    data_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_professional_items_owner ON professional_items(student_user_id, kind);
   CREATE INDEX IF NOT EXISTS idx_class_attendance_student ON class_attendance(student_user_id, subject_id, class_date);
   CREATE INDEX IF NOT EXISTS idx_test_marks_student ON test_marks(student_user_id, subject_id);
   CREATE INDEX IF NOT EXISTS idx_assignments_subject ON assignments(subject_id);
@@ -476,6 +500,184 @@ export async function getDashboardState(session) {
 
   return { me: session, requests: users.filter(u => u.status === "Pending"), users, attendance, notifications, loginHistory };
 }
+
+export async function getDashboardPreference(userId) {
+  const row = first(await db.execute({
+    sql: `SELECT last_selected_mode AS lastSelectedMode FROM student_dashboard_preferences WHERE user_id = ?`,
+    args: [userId],
+  }));
+  return row?.lastSelectedMode || null;
+}
+
+export async function saveDashboardPreference(userId, mode) {
+  if (!["campus", "professional"].includes(mode)) throw new Error("Dashboard mode must be campus or professional.");
+  await db.execute({
+    sql: `INSERT INTO student_dashboard_preferences (user_id, last_selected_mode) VALUES (?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET last_selected_mode = excluded.last_selected_mode`,
+    args: [userId, mode],
+  });
+  return mode;
+}
+
+const safeJson = (value, fallback) => {
+  try { return JSON.parse(value); } catch { return fallback; }
+};
+
+export async function getProfessionalDashboard(userId) {
+  await db.execute({
+    sql: `INSERT OR IGNORE INTO professional_profiles (student_user_id, share_token) VALUES (?, ?)`,
+    args: [userId, randomBytes(24).toString("hex")],
+  });
+  const profileRow = first(await db.execute({
+    sql: `SELECT profile_json AS profileJson, visibility, share_fields_json AS shareFieldsJson, share_token AS shareToken
+      FROM professional_profiles WHERE student_user_id = ?`,
+    args: [userId],
+  }));
+  const itemRows = all(await db.execute({
+    sql: `SELECT id, kind, data_json AS dataJson, created_at AS createdAt, updated_at AS updatedAt
+      FROM professional_items WHERE student_user_id = ? ORDER BY updated_at DESC, id DESC`,
+    args: [userId],
+  }));
+  return {
+    profile: {
+      ...safeJson(profileRow.profileJson, {}),
+      visibility: profileRow.visibility,
+      shareFields: safeJson(profileRow.shareFieldsJson, []),
+      shareToken: profileRow.shareToken,
+    },
+    items: itemRows.map(({ dataJson, ...item }) => ({ ...item, ...safeJson(dataJson, {}) })),
+    lastSelectedMode: await getDashboardPreference(userId),
+  };
+}
+
+export async function saveProfessionalProfile(userId, profile, visibility, shareFields) {
+  await db.execute({
+    sql: `INSERT OR IGNORE INTO professional_profiles (student_user_id, share_token) VALUES (?, ?)`,
+    args: [userId, randomBytes(24).toString("hex")],
+  });
+  const allowedFields = new Set([
+    "fullName", "photoUrl", "college", "degree", "branch", "graduationYear", "currentYear", "headline",
+    "targetRole", "interests", "about", "workType", "location", "github", "linkedin",
+    "portfolio", "codingProfile", "phone", "email",
+  ]);
+  const current = first(await db.execute({
+    sql: `SELECT profile_json AS profileJson FROM professional_profiles WHERE student_user_id = ?`,
+    args: [userId],
+  }));
+  const cleanProfile = safeJson(current.profileJson, {});
+  for (const [key, value] of Object.entries(profile || {})) {
+    if (allowedFields.has(key) && typeof value === "string") cleanProfile[key] = value.trim().slice(0, 4000);
+  }
+  if (Array.isArray(profile?.roadmapProgress)) {
+    cleanProfile.roadmapProgress = [...new Set(profile.roadmapProgress.filter((phase) => /^phase-[1-9]\d*$/.test(phase)))].slice(0, 20);
+  }
+  const validShareFields = new Set([
+    "identity", "photo", "headline", "about", "skills", "projects", "certifications",
+    "experience", "achievements", "github", "linkedin", "portfolio",
+  ]);
+  const cleanShareFields = [...new Set((Array.isArray(shareFields) ? shareFields : [])
+    .filter((field) => validShareFields.has(field)))];
+  const safeVisibility = visibility === "public" ? "public" : "private";
+  await db.execute({
+    sql: `UPDATE professional_profiles SET profile_json = ?, visibility = ?, share_fields_json = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE student_user_id = ?`,
+    args: [JSON.stringify(cleanProfile), safeVisibility, JSON.stringify(cleanShareFields), userId],
+  });
+  return getProfessionalDashboard(userId);
+}
+
+const professionalKinds = new Set([
+  "skill", "project", "certification", "experience", "achievement", "application", "interview",
+]);
+
+export async function createProfessionalItem(userId, kind, data) {
+  if (!professionalKinds.has(kind)) throw new Error("Unsupported professional record type.");
+  const recordData = Object.fromEntries(Object.entries(data).filter(([key]) => key !== "id" && key !== "kind"));
+  const cleanData = JSON.stringify(recordData);
+  if (cleanData.length > 20000) throw new Error("Professional record is too large.");
+  const result = await db.execute({
+    sql: `INSERT INTO professional_items (student_user_id, kind, data_json) VALUES (?, ?, ?)`,
+    args: [userId, kind, cleanData],
+  });
+  return { id: Number(result.lastInsertRowid), kind, ...recordData };
+}
+
+export async function updateProfessionalItem(userId, itemId, kind, data) {
+  if (!professionalKinds.has(kind)) throw new Error("Unsupported professional record type.");
+  const recordData = Object.fromEntries(Object.entries(data).filter(([key]) => key !== "id" && key !== "kind"));
+  const cleanData = JSON.stringify(recordData);
+  if (cleanData.length > 20000) throw new Error("Professional record is too large.");
+  const result = await db.execute({
+    sql: `UPDATE professional_items SET kind = ?, data_json = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND student_user_id = ?`,
+    args: [kind, cleanData, itemId, userId],
+  });
+  return Number(result.rowsAffected) > 0;
+}
+
+export async function deleteProfessionalItem(userId, itemId) {
+  const result = await db.execute({
+    sql: `DELETE FROM professional_items WHERE id = ? AND student_user_id = ?`,
+    args: [itemId, userId],
+  });
+  return Number(result.rowsAffected) > 0;
+}
+
+export async function getPublicProfessionalProfile(token) {
+  const row = first(await db.execute({
+    sql: `SELECT student_user_id AS studentUserId, profile_json AS profileJson, visibility,
+      share_fields_json AS shareFieldsJson
+      FROM professional_profiles WHERE share_token = ?`,
+    args: [token],
+  }));
+  if (!row || row.visibility !== "public") return null;
+  const profile = safeJson(row.profileJson, {});
+  const fields = new Set(safeJson(row.shareFieldsJson, []));
+  const publicProfile = {};
+  const keys = {
+    identity: ["fullName"],
+    photo: ["photoUrl"],
+    headline: ["headline", "targetRole"],
+    about: ["about"],
+    github: ["github"],
+    linkedin: ["linkedin"],
+    portfolio: ["portfolio"],
+  };
+  for (const [shareField, profileKeys] of Object.entries(keys)) {
+    if (fields.has(shareField)) for (const key of profileKeys) publicProfile[key] = profile[key] || "";
+  }
+  const kindFields = {
+    skills: "skill",
+    projects: "project",
+    certifications: "certification",
+    experience: "experience",
+    achievements: "achievement",
+  };
+  const publicItemFields = {
+    skill: ["name", "category", "proficiency", "evidence"],
+    project: ["name", "description", "problem", "technologies", "role", "github", "demo", "image", "year", "team", "achievements", "featured"],
+    certification: ["name", "organization", "issueDate", "credentialId", "url"],
+    experience: ["type", "organization", "role", "startDate", "endDate", "description", "technologies", "responsibilities", "achievements"],
+    achievement: ["type", "name", "organization", "date", "result", "teamMembers", "project", "proof", "description"],
+  };
+  const sharedItems = {};
+  for (const [shareField, kind] of Object.entries(kindFields)) {
+    if (!fields.has(shareField)) continue;
+    const rows = all(await db.execute({
+      sql: `SELECT data_json AS dataJson FROM professional_items WHERE student_user_id = ? AND kind = ? ORDER BY updated_at DESC, id DESC`,
+      args: [row.studentUserId, kind],
+    }));
+    sharedItems[shareField] = rows.map(({ dataJson }) => {
+      const data = safeJson(dataJson, {});
+      return Object.fromEntries(publicItemFields[kind]
+        .filter((key) => ["string", "number", "boolean"].includes(typeof data[key]) || (Array.isArray(data[key]) && data[key].every((value) => typeof value === "string")))
+        .map((key) => [key, data[key]]));
+    });
+  }
+  return { profile: publicProfile, items: sharedItems };
+}
+
+
 
 export async function upsertAttendance({ studentUserId, classDate, status, markedBy }) {
   await db.execute({ sql: `INSERT INTO attendance (student_user_id, class_date, status, marked_by, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(student_user_id, class_date) DO UPDATE SET status = excluded.status, marked_by = excluded.marked_by, updated_at = CURRENT_TIMESTAMP`, args: [studentUserId, classDate, status, markedBy] });

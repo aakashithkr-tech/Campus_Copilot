@@ -1,4 +1,10 @@
 import { defaultState, demoUsers, navByRole, pageLabels } from "./data.js";
+import {
+  bindProfessionalEvents,
+  renderModeSelection,
+  renderProfessionalShell,
+  renderPublicProfile,
+} from "./professional.js";
 
 const API_BASE = typeof window !== "undefined" && window.location.hostname !== "localhost"
  ? "https://campus-copilot-whd3.onrender.com"
@@ -33,6 +39,13 @@ let state = structuredClone(defaultState);
 let session = loadSession();
 let loading = Boolean(session);
 let currentPage = "overview";
+let activeMode = "campus";
+let professionalPage = "overview";
+let professionalData = { profile: {}, items: [], lastSelectedMode: null };
+let professionalLoadError = "";
+let sharedProfessionalProfile = null;
+let sharedProfileError = "";
+const sharedProfileToken = new URLSearchParams(window.location.search).get("profile");
 let selectedRole = "student";
 let noticeFilter = "All";
 let noticeSearch = "";
@@ -185,6 +198,12 @@ function render() {
     target.innerHTML = otpPage(pendingOtpEmail);
   } else if (currentPage === "forgot-password") {
     target.innerHTML = forgotPasswordPage();
+  } else if (sharedProfileToken) {
+    target.innerHTML = sharedProfessionalProfile
+      ? renderPublicProfile(sharedProfessionalProfile)
+      : `<main class="pro-public"><section class="pro-panel"><h1>Profile unavailable</h1><p>${escapeHTML(sharedProfileError || "This profile is private or the link is no longer valid.")}</p><a href="/">Return to Campus Copilot</a></section></main>`;
+  } else if (currentPage === "mode-select") {
+    target.innerHTML = renderModeSelection(session?.name);
   } else if (currentPage === "reset-password") {
     target.innerHTML = resetPasswordPage(pendingOtpEmail);
   } else if (!session) {
@@ -199,6 +218,45 @@ function loadingPage() {
     <main class="loading-page">
       <span class="brand-mark">${icon("spark")}</span>
       <strong>Connecting to the campus database...</strong>
+  bindProfessionalEvents({
+    api,
+    onRender: render,
+    onNavigate: (page) => { professionalPage = page; render(); window.scrollTo({ top: 0, behavior: "auto" }); },
+    onMode: switchMode,
+    onUpdate: {
+      items: professionalData.items,
+      profile: professionalData.profile,
+      reload: reloadProfessional,
+      toast: showToast,
+    },
+  });
+}
+
+async function reloadProfessional() {
+  try {
+    professionalData = await api("/api/professional");
+    professionalLoadError = "";
+  } catch (error) {
+    professionalLoadError = error.message;
+    showToast(error.message, "error");
+  }
+  render();
+}
+
+async function switchMode(mode) {
+  if (!session || session.role !== "student" || !["campus", "professional"].includes(mode)) return;
+  try {
+    const saved = await api("/api/student/mode", { method: "POST", body: { mode } });
+    professionalData.lastSelectedMode = saved.lastSelectedMode;
+    activeMode = mode;
+    currentPage = "overview";
+    professionalPage = "overview";
+    document.body.classList.remove("sidebar-open");
+    render();
+    window.scrollTo({ top: 0, behavior: "auto" });
+  } catch (error) {
+    showToast(error.message, "error");
+  }
       <span class="loading-bar"><i></i></span>
     </main>
   `;
@@ -394,6 +452,15 @@ function appShell() {
   const initials = displayName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
   const detail = realUser.loginId || realUser.admissionNumber || demoUsers[session.role]?.detail || '';
   const displayRole = session.role;
+  if (session.role === "student" && activeMode === "professional") {
+    return renderProfessionalShell({
+      user: state.me || session,
+      profile: professionalData.profile || {},
+      items: professionalData.items || [],
+      page: professionalPage,
+      loadError: professionalLoadError,
+    });
+  }
   return `
     <div class="app-shell">
       <aside class="sidebar" id="sidebar" style="display:flex;flex-direction:column;height:100vh;overflow:hidden">
@@ -472,6 +539,7 @@ function appShell() {
               <kbd>⌘ K</kbd>
             </label>
             <button class="icon-button notification-button" data-action="notifications" aria-label="Notifications">${icon("bell")}<span></span></button>
+            ${displayRole === "student" ? `<div class="campus-mode-switch" aria-label="Switch dashboard mode"><button class="selected" aria-current="page" data-set-mode="campus">🏫 Campus</button><button data-set-mode="professional">💼 Professional</button></div>` : ""}
             <span class="role-badge ${session.role}">${session.role}</span>
           </div>
         </header>
@@ -2422,7 +2490,20 @@ function bindEvents() {
       chat = initChat();
       modal = null;
       await refreshState();
-      currentPage = "overview";
+      if (result.user.role === "student") {
+        try {
+          professionalData = await api("/api/professional");
+          professionalLoadError = "";
+          activeMode = professionalData.lastSelectedMode || "campus";
+          currentPage = professionalData.lastSelectedMode ? "overview" : "mode-select";
+        } catch (error) {
+          professionalLoadError = error.message;
+          activeMode = "campus";
+          currentPage = "overview";
+        }
+      } else {
+        currentPage = "overview";
+      }
       render();
       window.scrollTo({ top: 0, behavior: "auto" });
       showToast(`Welcome to your ${role} workspace.`);
@@ -3180,7 +3261,13 @@ async function handleUtilityForm(event) {
 }
 
 async function initialize() {
-  if (session) {
+  if (sharedProfileToken) {
+    try {
+      sharedProfessionalProfile = await api(`/api/professional/share/${encodeURIComponent(sharedProfileToken)}`);
+    } catch (error) {
+      sharedProfileError = error.message;
+    }
+  } else if (session) {
     try {
       await refreshState();
     } catch {
@@ -3192,3 +3279,14 @@ async function initialize() {
 }
 
 initialize();
+      if (session.role === "student") {
+        try {
+          professionalData = await api("/api/professional");
+          professionalLoadError = "";
+          activeMode = professionalData.lastSelectedMode || "campus";
+          currentPage = professionalData.lastSelectedMode ? "overview" : "mode-select";
+        } catch (error) {
+          professionalLoadError = error.message;
+          activeMode = "campus";
+        }
+      }

@@ -32,7 +32,15 @@ import {
   addSubjectForAdmin,
   addTeacherByAdmin,
   getProfile,
-  upsertProfile
+  upsertProfile,
+  createProfessionalItem,
+  deleteProfessionalItem,
+  getDashboardPreference,
+  getProfessionalDashboard,
+  getPublicProfessionalProfile,
+  saveDashboardPreference,
+  saveProfessionalProfile,
+  updateProfessionalItem,
 } from "./database.mjs";
 
 const port = Number(process.env.PORT || 4173);
@@ -136,6 +144,84 @@ const readBody = async (req) => {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
   } catch {
     return {};
+      const publicProfileMatch = pathname.match(/^\/api\/professional\/share\/([a-f0-9]{48})$/);
+      if (req.method === "GET" && publicProfileMatch) {
+        const sharedProfile = await getPublicProfessionalProfile(publicProfileMatch[1]);
+        if (!sharedProfile) { json(res, 404, { error: "This professional profile is private or unavailable." }); return; }
+        json(res, 200, sharedProfile);
+        return;
+      }
+
+      if (pathname === "/api/student/mode") {
+        const session = await getSession(bearerToken(req));
+        if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
+        if (session.role !== "student") { json(res, 403, { error: "Student access required." }); return; }
+        if (req.method === "GET") {
+          json(res, 200, { lastSelectedMode: await getDashboardPreference(session.id) });
+          return;
+        }
+        if (req.method === "POST") {
+          const { mode } = await readBody(req);
+          if (!["campus", "professional"].includes(mode)) {
+            json(res, 400, { error: "Choose campus or professional mode." });
+            return;
+          }
+          await saveDashboardPreference(session.id, mode);
+          json(res, 200, { lastSelectedMode: mode });
+          return;
+        }
+      }
+
+      if (pathname.startsWith("/api/professional")) {
+        const session = await getSession(bearerToken(req));
+        if (!session) { json(res, 401, { error: "Unauthorized" }); return; }
+        if (session.role !== "student") { json(res, 403, { error: "Student access required." }); return; }
+
+        if (req.method === "GET" && pathname === "/api/professional") {
+          json(res, 200, await getProfessionalDashboard(session.id));
+          return;
+        }
+        if (req.method === "POST" && pathname === "/api/professional/profile") {
+          const body = await readBody(req);
+          const result = await saveProfessionalProfile(
+            session.id,
+            body.profile,
+            body.visibility,
+            body.shareFields,
+          );
+          json(res, 200, result);
+          return;
+        }
+        if (req.method === "POST" && pathname === "/api/professional/items") {
+          const { kind, data } = await readBody(req);
+          if (!kind || !data || typeof data !== "object" || Array.isArray(data)) {
+            json(res, 400, { error: "A record type and record data are required." });
+            return;
+          }
+          const item = await createProfessionalItem(session.id, kind, data);
+          json(res, 201, { item });
+          return;
+        }
+        const itemMatch = pathname.match(/^\/api\/professional\/items\/(\d+)$/);
+        if (itemMatch && req.method === "PATCH") {
+          const { kind, data } = await readBody(req);
+          if (!kind || !data || typeof data !== "object" || Array.isArray(data)) {
+            json(res, 400, { error: "A record type and record data are required." });
+            return;
+          }
+          const updated = await updateProfessionalItem(session.id, Number(itemMatch[1]), kind, data);
+          if (!updated) { json(res, 404, { error: "Professional record not found." }); return; }
+          json(res, 200, { message: "Professional record updated." });
+          return;
+        }
+        if (itemMatch && req.method === "DELETE") {
+          const deleted = await deleteProfessionalItem(session.id, Number(itemMatch[1]));
+          if (!deleted) { json(res, 404, { error: "Professional record not found." }); return; }
+          json(res, 200, { message: "Professional record deleted." });
+          return;
+        }
+      }
+
   }
 };
 
