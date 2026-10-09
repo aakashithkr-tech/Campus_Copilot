@@ -1693,10 +1693,12 @@ function renderModal() {
 
   if (modal.type === "profile") {
     const p = state.myProfile || {};
-    const u = state.realUsers ? state.realUsers.find(ru => ru.loginId === session.loginId) : session;
-    const initials = (u?.name || "Student").split(" ").map(n=>n[0]).join("").substring(0,2).toUpperCase();
+    const u = state.me || session;
+    const isStudent = session.role === "student";
+    const roleTitle = isStudent ? "Student" : session.role === "admin" ? "Admin" : "Teacher";
+    const initials = (u?.name || roleTitle).split(" ").map(n=>n[0]).join("").substring(0,2).toUpperCase();
     const isAdmin = session.role === "admin";
-    const disabledAttr = isAdmin ? "" : "disabled";
+    const disabledAttr = isAdmin && isStudent ? "" : "disabled";
 
     return `
 <div class="profile-modal-overlay" data-action="close-modal">
@@ -1708,8 +1710,8 @@ function renderModal() {
         <div class="sidebar-logo">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z"></path><path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"></path></svg>
           <div>
-            <h3>Student Details</h3>
-            <p>Manage your personal and academic information.</p>
+            <h3>${roleTitle} Details</h3>
+            <p>${isStudent ? "Manage your personal and academic information." : "Your account information."}</p>
           </div>
         </div>
         
@@ -1717,8 +1719,8 @@ function renderModal() {
           <div class="sidebar-avatar">${initials}
             <div class="camera-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></div>
           </div>
-          <h4>${escapeHTML(u?.name || "Student")}</h4>
-          <p>${escapeHTML(p.course || "Course not set")} ${p.year ? '- '+p.year : ''}</p>
+          <h4>${escapeHTML(u?.name || roleTitle)}</h4>
+          <p>${isStudent ? `${escapeHTML(p.course || "Course not set")} ${p.year ? '- '+escapeHTML(p.year) : ''}` : roleTitle}</p>
           <span class="active-badge">● Active</span>
         </div>
       </div>
@@ -1728,22 +1730,30 @@ function renderModal() {
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
           Basic Information
         </a>
+        ${isStudent ? `
         <a href="#" onclick="event.preventDefault(); document.getElementById('academic-details').scrollIntoView({behavior: 'smooth'})" class="nav-item">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z"></path></svg>
           Academic Details
         </a>
+        ` : ""}
+        ${isStudent ? `
         <a href="#" onclick="event.preventDefault(); document.getElementById('additional-info').scrollIntoView({behavior: 'smooth'})" class="nav-item">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
           Additional Information
         </a>
+        ` : ""}
+        ${isStudent ? `
         <a href="#" onclick="event.preventDefault(); document.getElementById('emergency-contact').scrollIntoView({behavior: 'smooth'})" class="nav-item">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
           Emergency Contact
         </a>
+        ` : ""}
+        ${isStudent ? `
         <a href="#" onclick="event.preventDefault(); window.location.href = '?page=professional';" class="nav-item">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
           Professional Dashboard
         </a>
+        ` : ""}
         <a href="#" onclick="event.preventDefault(); document.getElementById('settings-section').scrollIntoView({behavior: 'smooth'})" class="nav-item">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
           Settings
@@ -1755,8 +1765,8 @@ function renderModal() {
     <div class="profile-content-split">
       <div class="profile-new-header">
         <div class="profile-title-area">
-          <h2>Student Details</h2>
-          <p>Update your personal and academic information.</p>
+          <h2>${roleTitle} Details</h2>
+          <p>${isStudent ? "Update your personal and academic information." : "Your account information."}</p>
         </div>
         <button class="profile-close-btn" data-action="close-modal">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -1784,7 +1794,7 @@ function renderModal() {
                 </div>
               </div>
               <div class="form-group">
-                <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg> Student ID / Roll No. <span class="req">*</span></label>
+                <label><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg> ${isStudent ? "Student ID / Roll No." : "Login ID"} <span class="req">*</span></label>
                 <div class="input-wrapper">
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
                   <input type="text" name="loginId" value="${escapeHTML(u?.loginId || '')}" readonly>
@@ -1807,6 +1817,7 @@ function renderModal() {
             </div>
           </div>
 
+          ${isStudent ? `
           <!-- Academic Details -->
           <div id="academic-details" class="profile-section-card">
             <div class="section-card-header">
@@ -1955,6 +1966,8 @@ function renderModal() {
               </div>
             </div>
           </div>
+
+          ` : ""}
 
           <!-- Settings -->
           <div id="settings-section" class="profile-section-card">

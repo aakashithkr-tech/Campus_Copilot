@@ -571,7 +571,7 @@ export async function getProfile(loginId) {
 export async function upsertProfile(loginId, profile) {
   await db.execute({
     sql: `INSERT INTO student_profiles (login_id, course, year, semester, section, dob, gender, city, admission_year, guardian_name, emergency_number, phone)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(login_id) DO UPDATE SET
             course = excluded.course,
             year = excluded.year,
